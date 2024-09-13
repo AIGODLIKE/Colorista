@@ -5,7 +5,7 @@ bl_info = {
     'blender': (4, 0, 0),
     'location': '3DView->Panel',
     'category': '辣椒出品',
-    'doc_url': "https://www.baidu.com"
+    'doc_url': "https://github.com/AIGODLIKE/Colorista"
 }
 
 import sys

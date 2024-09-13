@@ -74,4 +74,4 @@ class ColoringPanel(bpy.types.Panel):
 
     def draw_header(self, context: Context):
         layout = self.layout
-        layout.operator("wm.url_open", text="", icon="URL").url = "https://www.baidu.com"
+        layout.operator("wm.url_open", text="", icon="URL").url = "https://github.com/AIGODLIKE/Colorista"
