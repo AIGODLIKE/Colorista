@@ -30,5 +30,3 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 [BlenderCN-LJ](https://space.bilibili.com/35723238)is responsible for debugging, documenting, and promoting this tool.
 
-
-我还在写界面
