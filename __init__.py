@@ -1,10 +1,10 @@
 bl_info = {
     'name': 'Colorista',
-    'author': '会飞的键盘侠',
+    'author': '朔朔,会飞的键盘侠，只剩一瓶辣椒酱',
     'version': (0, 0, 1),
     'blender': (4, 0, 0),
     'location': '3DView->Panel',
-    'category': '辣椒出品',
+    'category': 'Compositor',
     'doc_url': "https://github.com/AIGODLIKE/Colorista"
 }
 
@@ -16,10 +16,6 @@ from .utils.logger import logger
 
 
 def register():
-    if bpy.app.version < (4, 0, 0):
-        return
-        raise RuntimeError('Blender版本不得低于 4.0.0')
-    logger.debug(f'{bl_info["name"]}: register')
     reg()
 
 
