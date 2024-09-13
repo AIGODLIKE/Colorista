@@ -43,11 +43,45 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 **Tint**：Adjusts the image towards green or purple, ideal for correcting color balance and ensuring a natural tone.
 
-<a>
-  <img src="https://github.com/user-attachments/assets/5a89ef99-7571-45b9-a7cc-ff4986b689d0" alt="image" width="500">
-</a>
-
 **Exposure** Adjusts the overall brightness, useful for correcting overexposed or underexposed images, and adjusting the overall light level.
+
+### Highlights/Shadows/Whites/Blacks Series
+
+**Highlights**:Affects the brightest areas of the image. Though the range is small, the intensity enhancement is stronger than the white adjustment, ideal for fine-tuning.
+
+**Shadows**:Adjusts the brightness of the darkest areas. The range is small, but the effect is more pronounced, with stronger impact than the black adjustment.
+
+**Whites**:Controls the overall brightness of light areas. The range is large but the effect is subtle, suitable for broad light area adjustments.
+
+**Blacks**:Adjusts the overall brightness of dark areas. The range is wide, and the effect is smooth, used to control the brightness level of the entire dark area.
+
+### Saturation Series
+
+**Intelligent Saturation**:Automatically adjusts saturation, enhancing some areas while reducing others. If the image saturation is already as desired, this parameter may not have a noticeable effect.
+
+**Natural Saturation**:Prioritizes enhancing low-saturation areas, making the colors appear more natural, suitable for handling hazy regions.
+
+**Contrast Saturation**:Prioritizes enhancing high-saturation areas, highlighting dominant colors and making the image more visually impactful.
+
+**Saturation**:Controls the overall saturation, adjusting the intensity of colors, and is an essential parameter for color adjustment.
+
+### Contrast and Sharpness Series
+
+**Intelligent Contrast**:Adjusts based on the contrast distribution of the image. Sliding left reduces contrast automatically, with varying intensity across different regions; sliding right increases contrast, again varying by region. If the contrast is already ideal, there may be no significant change.
+
+**Contrast**:Manually adjusts the brightness and darkness contrast, enhancing the sense of depth and making the image more three-dimensional.
+
+**Sharpness**:Controls the sharpness or blurriness of the image.
+
+### Desaturation
+
+**Desaturation**:On the left, displays a black-and-white map of the image’s saturation distribution for better observation of saturation levels; on the right, shows a luminance distribution map for assessing overall brightness.
+
+### Glow 
+
+**Glow Intensity**:Controls the glow effect of the scene. After AGX De-hazing is enabled, the glow effect becomes more pronounced but is not mandatory.
+
+**Glow Threshold**:Controls at what brightness level the glow effect appears. A lower threshold allows glow to appear in lower-brightness areas.
 
 ## limitation
 
