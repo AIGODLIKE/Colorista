@@ -5,7 +5,7 @@
   <img src="https://github.com/user-attachments/assets/7bf4d809-ae68-4bfc-a49f-bdefc1f149d0" alt="image" width="150">
 </a>
 
-专为调色师设计的快捷调色工具，允许一键构建AGX颜色分级面板，并直接在视口中实时预览效果
+专为调色师设计的快捷调色工具，允许一键构建AGX调色面板，并直接在视口中实时预览效果
 
 
 
