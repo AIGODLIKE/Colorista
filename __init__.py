@@ -17,6 +17,7 @@ from .utils.logger import logger
 
 def register():
     if bpy.app.version < (4, 0, 0):
+        return
         raise RuntimeError('Blender版本不得低于 4.0.0')
     logger.debug(f'{bl_info["name"]}: register')
     reg()
