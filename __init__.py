@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'Colorista',
     'author': '朔朔,会飞的键盘侠，只剩一瓶辣椒酱',
-    'version': (0, 0, 1),
+    'version': (1, 0, 0),
     'blender': (4, 0, 0),
     'location': '3DView->Panel',
     'category': 'Compositor',
