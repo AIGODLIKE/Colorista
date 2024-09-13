@@ -20,8 +20,8 @@ A convenient color grading add-on designed for colorists, allowing for one click
 ## Producer
 
 
-朔朔的搅拌机日常 provided the principle node production for the color palette, which was the key to the birth of this tool.
+[朔朔的搅拌机日常](https://space.bilibili.com/1220061774) provided the principle node production for the color palette, which was the key to the birth of this tool.
 
-KarryCharon has completed the code development of the tool.
+[KarryCharon](https://space.bilibili.com/319473039) has completed the code development of the tool.
 
-BlenderCN-LJ is responsible for debugging, documenting, and promoting this tool.
+[BlenderCN-LJ](https://space.bilibili.com/35723238)is responsible for debugging, documenting, and promoting this tool.
