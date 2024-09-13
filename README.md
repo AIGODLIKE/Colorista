@@ -1,4 +1,7 @@
 ## Colorista
+<a href="https://acggit.com/">
+  <img src="https://github.com/user-attachments/assets/78a7fa31-eb55-476e-926e-4df7f9ef2365" alt="image" width="150">
+</a>
 
 A convenient color grading add-on designed for colorists, allowing for one click construction of AGX color grading panels and real-time preview of effects directly in the viewport.
 
