@@ -4,7 +4,7 @@ schema_version = "1.0.0"
 # Change the values according to your extension
 id = "Colorista"
 version = "1.0.0"
-name = "Coloring Tool"
+name = "Colorista"
 tagline = "Coloring"
 maintainer = "AIGODLIKE <karrycharon@qq.com>"
 # Supported types: "add-on", "theme"
