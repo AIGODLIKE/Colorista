@@ -18,6 +18,25 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 · Support both Chinese and English
 
+## Use
+
+### AGX Color Space De-hazing Series
+
+**AGX De-hazing**: Applicable to the AGX color space. When enabled, it removes the hazy appearance, significantly improving image clarity. It is recommended to maximize the parameter.
+
+
+**Saturation De-hazing weight**: Adjusted when AGX De-hazing is enabled. At 0, AGX De-hazing only affects brightness; at 1, it also affects saturation. This helps prevent the image from becoming overly saturated.
+
+**Soft De-Gray/Violent De-Grey**: Used after enabling AGX De-hazing. Soft De-hazing and Aggressive De-hazing are different de-hazing methods. The aggressive mode makes the image clearer but can be too glaring.
+
+<a>
+  <img src="https://github.com/user-attachments/assets/e6505ef4-7c30-4bc8-8fec-52024dfcc412" alt="image" width="500">
+</a>
+
+
+
+
+
 ## limitation
 
 · Specially designed for AGX, other modes may have slightly inferior effects
