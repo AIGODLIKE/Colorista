@@ -1,5 +1,5 @@
-<a href="./READMECN.md"><img src="https://img.shields.io/badge/🇬🇧English-0b8cf5" width="100"></a>
-<a href="./README.md"><img src="https://img.shields.io/badge/🇨🇳中文简体-e9e9e9"  width="100"></a>
+<a href="./README.md"><img src="https://img.shields.io/badge/🇬🇧English-0b8cf5"  width="100"></a>
+<a href="./READMECN.md"><img src="https://img.shields.io/badge/🇨🇳中文简体-e9e9e9" width="100"></a>
 
 ## Colorista调色师
 <a href="https://space.bilibili.com/1220061774">
