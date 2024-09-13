@@ -1,6 +1,5 @@
-<a href="./README.md"><img src="https://img.shields.io/badge/🇬🇧English-0b8cf5"  width="100"></a>
-<a href="./READMECN.md"><img src="https://img.shields.io/badge/🇨🇳中文简体-e9e9e9" width="100"></a>
-
+<a href="./README.md"><img src="https://img.shields.io/badge/🇬🇧English-e9e9e9"></a>
+<a href="./READMECN.md"><img src="https://img.shields.io/badge/🇨🇳中文简体-0b8cf5"></a>
 ## Colorista调色师
 <a href="https://space.bilibili.com/1220061774">
   <img src="https://github.com/user-attachments/assets/7bf4d809-ae68-4bfc-a49f-bdefc1f149d0" alt="image" width="150">
