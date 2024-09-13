@@ -33,9 +33,21 @@ A convenient color grading add-on designed for colorists, allowing for one click
   <img src="https://github.com/user-attachments/assets/e6505ef4-7c30-4bc8-8fec-52024dfcc412" alt="image" width="500">
 </a>
 
+### Color Temperature, Tint, and Exposure
 
+**Color Temperature**：Adjusts the warmth or coolness of the image. Moving left leans towards cool (blue), while moving right leans towards warm (yellow), suitable for setting the overall atmosphere.
 
+<a>
+  <img src="https://github.com/user-attachments/assets/1801c48d-887a-4956-ae2a-e30090abaa7a" alt="image" width="500">
+</a>
 
+**Tint**：Adjusts the image towards green or purple, ideal for correcting color balance and ensuring a natural tone.
+
+<a>
+  <img src="https://github.com/user-attachments/assets/5a89ef99-7571-45b9-a7cc-ff4986b689d0" alt="image" width="500">
+</a>
+
+**Exposure** Adjusts the overall brightness, useful for correcting overexposed or underexposed images, and adjusting the overall light level.
 
 ## limitation
 
