@@ -15,9 +15,9 @@ website = "https://github.com/AIGODLIKE/Colorista"
 
 # Optional list defined by Blender and server, see:
 # https://docs.blender.org/manual/en/dev/extensions/tags.html
-tags = ["Modeling", "Node", "Render", "Compositor"]
+tags = ["Modeling", "Node", "Render", "Compositing"]
 
-blender_version_min = "4.0.0"
+blender_version_min = "4.2.0"
 # Optional: maximum supported Blender version
 # blender_version_max = "5.1.0"
 license = [
