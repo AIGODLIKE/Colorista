@@ -9,7 +9,7 @@ bl_info = {
 }
 
 import sys
-import bpy
+
 from .src import register as reg
 from .src import unregister as unreg
 from .utils.logger import logger

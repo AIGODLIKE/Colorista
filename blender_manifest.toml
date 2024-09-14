@@ -27,11 +27,9 @@ tags = ["Modeling", "Node", "Render", "Compositor"]
 blender_version_min = "4.0.0"
 # Optional: maximum supported Blender version
 # blender_version_max = "5.1.0"
-
-# License conforming to https://spdx.org/licenses/ (use "SPDX: prefix)
-# https://docs.blender.org/manual/en/dev/extensions/licenses.html
 license = [
-  "SPDX:GPL-2.0-or-later",
+  "SPDX:GPL-3.0-or-later",
 ]
-# Optional: required by some licenses.
-# copyright = []
+
+[permissions]
+files = "Read Node"
