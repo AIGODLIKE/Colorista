@@ -10,13 +10,6 @@ maintainer = "AIGODLIKE <karrycharon@qq.com>"
 # Supported types: "add-on", "theme"
 type = "add-on"
 
-# Optional: add-ons can list which resources they will require:
-# * "files" (for access of any filesystem operations)
-# * "network" (for internet access)
-# * "camera" (to capture photos and videos)
-# * "microphone" (to capture audio)
-permissions = ["files", "network"]
-
 # Optional link to documentation, support, source files, etc
 website = "https://github.com/AIGODLIKE/Colorista"
 
@@ -31,5 +24,10 @@ license = [
   "SPDX:GPL-3.0-or-later",
 ]
 
+# Optional: add-ons can list which resources they will require:
+# * "files" (for access of any filesystem operations)
+# * "network" (for internet access)
+# * "camera" (to capture photos and videos)
+# * "microphone" (to capture audio)
 [permissions]
 files = "Read Node"
