@@ -30,10 +30,17 @@ class ColoringPanel(bpy.types.Panel):
         layout.prop(prop, "enable_coloring", toggle=True)
         if not context.scene.ac_prop.enable_coloring:
             return
+        box = layout.box()
+        row = box.row()
+        row.label(text="Compositor")
+        row.prop(bpy.context.space_data.shading, "use_compositor", expand=True)
         if (4, 2) <= bpy.app.version <= (4, 3):
-            col = layout.row().column()
-            col.prop(context.scene.render, "compositor_device", text="Device")
-            col.prop(context.scene.render, "compositor_precision", text="Precision")
+            row = box.row()
+            row.label(text="Device")
+            row.prop(context.scene.render, "compositor_device", expand=True)
+            row = box.row()
+            row.label(text="Precision")
+            row.prop(context.scene.render, "compositor_precision", expand=True)
         if not context.scene.use_nodes:
             return
         nodes: list[bpy.types.Node] = []
