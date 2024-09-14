@@ -2,28 +2,41 @@ import bpy
 from ...utils.logger import logger
 from pathlib import Path
 
+LANG_SUFFIXES = {
+    "en_US": "EN",
+    "zh_CN": "CN",
+    "zh_HANS": "CN",
+}
+
 
 class Props(bpy.types.PropertyGroup):
     ovt = ""
 
+    def _get_locale(self):
+        if not bpy.context.preferences.view.use_translate_interface:
+            return "en_US"
+        return bpy.app.translations.locale
+
+    def _get_locale_suffix(self):
+        return LANG_SUFFIXES.get(self._get_locale(), "EN")
+
+    def _sce_name(self):
+        return f".AC-Coloring-{self._get_locale_suffix()}"
+
     def _load_compositor_scene(self, path):
-        if ".AC-Coloring" not in bpy.data.scenes:
+        sce_name = self._sce_name()
+        if sce_name not in bpy.data.scenes:
             with bpy.data.libraries.load(path, link=False) as (df, dt):
                 if "AC-Coloring" not in df.scenes:
                     return None
                 dt.scenes.append("AC-Coloring")
             sce = bpy.data.scenes["AC-Coloring"]
-            sce.name = ".AC-Coloring"
-        return bpy.data.scenes[".AC-Coloring"]
+            sce.name = sce_name
+        return bpy.data.scenes[sce_name]
 
     def load_compositor_sce(self):
         bpy.context.scene.use_nodes = True
-        lang_suffixes = {
-            "en_US": "EN",
-            "zh_CN": "CN",
-            "zh_HANS": "CN",
-        }
-        lang_suffix = lang_suffixes.get(bpy.app.translations.locale, "EN")
+        lang_suffix = self._get_locale_suffix()
         data_path = Path(__file__).parent.parent.parent / f"resource/data_{lang_suffix}.blend"
         if not data_path.exists():
             return
