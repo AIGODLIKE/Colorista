@@ -13,20 +13,21 @@ import sys
 from .src import register as reg
 from .src import unregister as unreg
 from .utils.logger import logger
+from .utils import register_util, unregister_util
 
 
 def register():
+    register_util()
     reg()
 
 
 def unregister():
-    logger.debug(f'{bl_info["name"]}: unregister')
     unreg()
+    unregister_util()
     modules_update()
 
 
 def modules_update():
-    from .utils.logger import logger
     logger.close()
     for i in list(sys.modules):
         if not i.startswith(__package__) or i == __package__:
