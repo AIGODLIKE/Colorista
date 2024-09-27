@@ -7,5 +7,5 @@ logs/runtime.log
 *.log
 .idea
 .vscode
-./resource/CN/00Test
-./resource/EN/00Test
+resource/CN/00Test
+resource/EN/00Test
