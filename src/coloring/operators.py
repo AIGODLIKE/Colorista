@@ -248,8 +248,9 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             fsocket = fnode.outputs[link.from_socket.identifier]
             tsocket = tnode.inputs[link.to_socket.identifier]
             sce.node_tree.links.new(tsocket, fsocket)
-        r_layer.scene = sce
-        r_layer.layer = bpy.context.view_layer.name
+        if r_layer:
+            r_layer.scene = sce
+            r_layer.layer = bpy.context.view_layer.name
         self.sync_settings(sce, load_sce)
         # 暂时不做缓存, 直接删除
         for ls in all_scenes:
