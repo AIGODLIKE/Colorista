@@ -98,7 +98,7 @@ class Props(bpy.types.PropertyGroup):
             return
         self.last_asset = False
         items = self.asset_items(context)
-        self.asset = items[max(self["asset"] - 1, 0)][0]
+        self.asset = items[(self["asset"] - 1) % len(items)][0]
 
     last_asset: bpy.props.BoolProperty(default=False,
                                        name="Last Asset",
@@ -111,7 +111,7 @@ class Props(bpy.types.PropertyGroup):
             return
         self.next_asset = False
         items = self.asset_items(context)
-        self.asset = items[min(self["asset"] + 1, len(items) - 1)][0]
+        self.asset = items[(self["asset"] + 1)  % len(items)][0]
 
     next_asset: bpy.props.BoolProperty(default=False,
                                        name="Next Asset",
@@ -157,7 +157,7 @@ class Props(bpy.types.PropertyGroup):
             return
         self.last_preset = False
         items = self.get_presets(context)
-        self.preset = items[max(self["preset"] - 1, 0)][0]
+        self.preset = items[(self["preset"] - 1) % len(items)][0]
 
     last_preset: bpy.props.BoolProperty(default=False,
                                         name="Last Preset",
@@ -170,7 +170,7 @@ class Props(bpy.types.PropertyGroup):
             return
         self.next_preset = False
         items = self.get_presets(context)
-        self.preset = items[min(self["preset"] + 1, len(items) - 1)][0]
+        self.preset = items[(self["preset"] + 1) % len(items)][0]
 
     next_preset: bpy.props.BoolProperty(default=False,
                                         name="Next Preset",
