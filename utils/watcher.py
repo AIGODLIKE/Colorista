@@ -139,7 +139,14 @@ class FSWatcher:
     @classmethod
     @lru_cache(maxsize=1024)
     def to_path(cls, path: Path):
+        if not path:
+            return ""
         return Path(path)
 
 
-FSWatcher.init()
+def register():
+    FSWatcher.init()
+
+
+def unregister():
+    FSWatcher.stop()
