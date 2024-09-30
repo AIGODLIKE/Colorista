@@ -8,29 +8,26 @@ bl_info = {
     'doc_url': "https://github.com/AIGODLIKE/Colorista"
 }
 
-import sys
-
-from .src import register as reg
-from .src import unregister as unreg
+import bpy
 from .utils.logger import logger
-from .utils import register_util, unregister_util
+
+modules = (
+    "src",
+    "utils",
+)
+
+reg, unreg = bpy.utils.register_submodule_factory(__package__, modules)
 
 
 def register():
-    register_util()
     reg()
 
 
 def unregister():
-    unreg()
-    unregister_util()
-    modules_update()
-
-
-def modules_update():
-    logger.close()
-    for i in list(sys.modules):
-        if not i.startswith(__package__) or i == __package__:
-            continue
-        del sys.modules[i]
-    del sys.modules[__package__]
+    try:
+        unreg()
+        logger.close()
+    except AttributeError:
+        # caused by blender 4.0 error
+        import traceback
+        traceback.print_exc()

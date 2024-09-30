@@ -1,5 +1,6 @@
 import bpy
 from pathlib import Path
+from functools import lru_cache
 
 LANG_SUFFIXES = {
     "en_US": "EN",
@@ -22,5 +23,17 @@ def get_resource_dir() -> Path:
     return Path(__file__).parent.parent / "resource"
 
 
+def grd() -> Path:
+    """
+    简写版
+    """
+    return get_resource_dir()
+
+
 def get_resource_dir_locale() -> Path:
     return get_resource_dir() / _get_locale_suffix()
+
+
+@lru_cache(maxsize=4)
+def get_resource_dir_cache(locale):
+    return get_resource_dir() / LANG_SUFFIXES.get(locale, "EN")

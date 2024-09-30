@@ -1,122 +1,223 @@
 import bpy
 from ...utils.logger import logger
+from ...utils.watcher import FSWatcher
+from ...utils.common import get_resource_dir_locale, get_resource_dir
+from ...utils.icon import Icon
+from ...utils.node import copy_node_properties
 from pathlib import Path
 
-LANG_SUFFIXES = {
-    "en_US": "EN",
-    "zh_CN": "CN",
-    "zh_HANS": "CN",
-}
+PROP_TCTX = "ColoristaTCTX"
+PANEL_TCTX = "ColoristaPanelTCTX"
 
 
 class Props(bpy.types.PropertyGroup):
-    ovt = ""
-
-    def _get_locale(self):
-        if not bpy.context.preferences.view.use_translate_interface:
-            return "en_US"
-        return bpy.app.translations.locale
-
-    def _get_locale_suffix(self):
-        return LANG_SUFFIXES.get(self._get_locale(), "EN")
-
-    def _sce_name(self):
-        return f".AC-Coloring-{self._get_locale_suffix()}"
-
-    def _load_compositor_scene(self, path):
-        sce_name = self._sce_name()
-        if sce_name not in bpy.data.scenes:
-            with bpy.data.libraries.load(path, link=False) as (df, dt):
-                if "AC-Coloring" not in df.scenes:
-                    return None
-                dt.scenes.append("AC-Coloring")
-            sce = bpy.data.scenes["AC-Coloring"]
-            sce.name = sce_name
-        return bpy.data.scenes[sce_name]
-
-    def load_compositor_sce(self):
-        bpy.context.scene.use_nodes = True
-        lang_suffix = self._get_locale_suffix()
-        data_path = Path(__file__).parent.parent.parent / f"resource/data_{lang_suffix}.blend"
-        if not data_path.exists():
-            return
-        return self._load_compositor_scene(data_path.as_posix())
-
-    def load_compositor_node_tree(self, load_sce: bpy.types.Scene):
-        if not load_sce:
-            return
-        # 从 load_scene 复制 compositor节点树到当前场景
-        sce = bpy.context.scene
-        sce.node_tree.nodes.clear()
-        node_map = {}
-        r_layer: bpy.types.CompositorNodeRLayers = None
-        for node in load_sce.node_tree.nodes:
-            new_node = sce.node_tree.nodes.new(type=node.bl_idname)
-            if new_node.type == "GROUP":
-                new_node.node_tree = node.node_tree
-            if node.type == "R_LAYERS":
-                r_layer = new_node
-            new_node.name = node.name
-            new_node.label = node.label
-            new_node.location = node.location
-            new_node.width = node.width
-            new_node.height = node.height
-            node_map[node.name] = new_node
-        for link in load_sce.node_tree.links:
-            fnode = node_map[link.from_node.name]
-            tnode = node_map[link.to_node.name]
-            fsocket = fnode.outputs[link.from_socket.identifier]
-            tsocket = tnode.inputs[link.to_socket.identifier]
-            sce.node_tree.links.new(tsocket, fsocket)
-        r_layer.scene = sce
-        r_layer.layer = bpy.context.view_layer.name
+    loaded_node_groups = set()
 
     def enable_coloring_f(self):
-        sce = bpy.context.scene
-        if sce.view_settings.view_transform != "AgX":
-            Props.ovt = sce.view_settings.view_transform
-        sce.view_settings.view_transform = "AgX"
-        # 2. 判断软件版本如果是4.2默认合成模式切换到gpu
-        if (4, 2) <= bpy.app.version <= (4, 3):
-            sce.render.compositor_device = "GPU"
-        # 4. 状态开启
-        bpy.context.space_data.shading.use_compositor = "ALWAYS"
-        bpy.context.scene.use_nodes = True
-        load_sce = self.load_compositor_sce()
-        self.load_compositor_node_tree(load_sce)
+        bpy.ops.colorista.compositor_nodetree_import(use_default=True)
 
     def update_enable_coloring(self, context: bpy.types.Context):
         logger.info("调色开启" if self.enable_coloring else "调色关闭")
         if self.enable_coloring:
             self.enable_coloring_f()
-        elif Props.ovt and context.scene.view_settings.view_transform == "AgX":
-            context.scene.view_settings.view_transform = Props.ovt
 
     enable_coloring: bpy.props.BoolProperty(default=False,
                                             name="Enable Coloring",
                                             description="Enable Coloring",
                                             update=update_enable_coloring,
-                                            translation_context="ColoristaTCTX")
+                                            translation_context=PROP_TCTX)
+
+    _ref_items = {}
+
+    def pre_dir_items(self, context):
+        rdir = get_resource_dir_locale()
+        # TODO: exist检查速度非常慢, 慢到足已影响UI的流畅
+        # if not rdir.exists():
+        #     return []
+        FSWatcher.register(rdir)
+        if not FSWatcher.consume_change(rdir) and rdir in self._ref_items:
+            return self._ref_items.get(rdir, [])
+        items = []
+        self._ref_items[rdir] = items
+        for f in rdir.iterdir():
+            if f.is_file():
+                continue
+            items.append((f.as_posix(), f.name, f.name, 0, len(items)))
+        items.sort(key=lambda x: x[1])
+        return self._ref_items.get(rdir, [])
+
+    pre_dir: bpy.props.EnumProperty(name="Asset Category",
+                                    items=pre_dir_items,
+                                    translation_context=PROP_TCTX)
+
+    def find_icon(self, name: str, path: Path) -> Path:
+        SUFFIXES = [".png", ".jpg", ".jpeg", ".tiff"]
+        for suf in SUFFIXES:
+            img = path.joinpath(name).with_suffix(suf)
+            if not img.exists():
+                continue
+            return img
+        return get_resource_dir().joinpath("icons/None.png")
+
+    def asset_items(self, context):
+        if not self.pre_dir:
+            return []
+        rdir = Path(self.pre_dir)
+        # TODO: exist检查速度非常慢, 慢到足已影响UI的流畅
+        # if not rdir.exists():
+        #     return []
+        FSWatcher.register(rdir)
+        if not FSWatcher.consume_change(rdir) and rdir in self._ref_items:
+            return self._ref_items.get(rdir, [])
+        items = []
+        self._ref_items[rdir] = items
+        for f in sorted(rdir.glob("*.blend"), key=lambda x: x.name):
+            icon_path = self.find_icon(f.stem, rdir)
+            Icon.reg_icon(icon_path.as_posix(), hq=True)
+            icon_id = Icon.get_icon_id(icon_path)
+            items.append((f.as_posix(), f.stem, f.stem, icon_id, len(items)))
+        return self._ref_items.get(rdir, [])
+
+    def set_asset(self, value):
+        self["asset"] = value
+        bpy.ops.colorista.compositor_nodetree_import()
+
+    def get_asset(self):
+        if "asset" not in self:
+            self["asset"] = 0
+        return self["asset"]
+
+    asset: bpy.props.EnumProperty(name="Asset",
+                                  items=asset_items,
+                                  get=get_asset,
+                                  set=set_asset,
+                                  translation_context=PROP_TCTX)
+
+    def update_last_asset(self, context):
+        if not self.last_asset:
+            return
+        self.last_asset = False
+        items = self.asset_items(context)
+        self.asset = items[max(self["asset"] - 1, 0)][0]
+
+    last_asset: bpy.props.BoolProperty(default=False,
+                                       name="Last Asset",
+                                       update=update_last_asset,
+                                       translation_context=PROP_TCTX,
+                                       )
+
+    def update_next_asset(self, context):
+        if not self.next_asset:
+            return
+        self.next_asset = False
+        items = self.asset_items(context)
+        self.asset = items[min(self["asset"] + 1, len(items) - 1)][0]
+
+    next_asset: bpy.props.BoolProperty(default=False,
+                                       name="Next Asset",
+                                       update=update_next_asset,
+                                       translation_context=PROP_TCTX,
+                                       )
+
+    def get_presets(self, context):
+        asset = self.asset
+        if not asset:
+            return []
+        rdir = Path(asset).with_suffix("")
+        # TODO: exist检查速度非常慢, 慢到足已影响UI的流畅
+        # if not rdir.exists():
+        #     return []
+        FSWatcher.register(rdir)
+        if not FSWatcher.consume_change(rdir) and rdir in self._ref_items:
+            return self._ref_items.get(rdir, [])
+        items = []
+        self._ref_items[rdir] = items
+        for file in sorted(rdir.glob("*.blend"), key=lambda x: x.name):
+            items.append((file.as_posix(), file.stem, file.stem, len(items)))
+        return self._ref_items.get(rdir, [])
+
+    def set_preset(self, value):
+        self["preset"] = value
+        bpy.ops.colorista.compositor_nodetree_import(preset=self.preset)
+
+    def get_preset(self):
+        if "preset" not in self:
+            self["preset"] = 0
+        return self["preset"]
+
+    preset: bpy.props.EnumProperty(name="Preset",
+                                   items=get_presets,
+                                   get=get_preset,
+                                   set=set_preset,
+                                   translation_context=PROP_TCTX,
+                                   )
+
+    def update_last_preset(self, context):
+        if not self.last_preset:
+            return
+        self.last_preset = False
+        items = self.get_presets(context)
+        self.preset = items[max(self["preset"] - 1, 0)][0]
+
+    last_preset: bpy.props.BoolProperty(default=False,
+                                        name="Last Preset",
+                                        update=update_last_preset,
+                                        translation_context=PROP_TCTX,
+                                        )
+
+    def update_next_preset(self, context):
+        if not self.next_preset:
+            return
+        self.next_preset = False
+        items = self.get_presets(context)
+        self.preset = items[min(self["preset"] + 1, len(items) - 1)][0]
+
+    next_preset: bpy.props.BoolProperty(default=False,
+                                        name="Next Preset",
+                                        update=update_next_preset,
+                                        translation_context=PROP_TCTX,
+                                        )
+
+    preset_save_name: bpy.props.StringProperty(name="Save Name",
+                                               default="",
+                                               translation_context=PROP_TCTX,
+                                               )
 
 
 @bpy.app.handlers.persistent
 def reload_handler(sce):
-    Props.ovt = ""
+    Props.loaded_node_groups.clear()
 
 
-def coloring_checker():
+@bpy.app.handlers.persistent
+def coloring_checker(_):
     try:
-        sce = bpy.context.scene
-        if sce.view_settings.view_transform != "AgX" and sce.ac_prop.enable_coloring:
-            sce.ac_prop.enable_coloring = False
         for area in bpy.context.screen.areas:
             if area.type != "VIEW_3D":
                 continue
             area.tag_redraw()
     except Exception:
         pass
-    return 0.1
 
 
-bpy.app.timers.register(coloring_checker, first_interval=0.1, persistent=True)
-bpy.app.handlers.load_post.append(reload_handler)
+clss = (
+    Props,
+)
+
+reg, unreg = bpy.utils.register_classes_factory(clss)
+
+
+def register():
+    reg()
+    bpy.types.Scene.colorista_prop = bpy.props.PointerProperty(type=Props)
+    bpy.types.Node.ac_expand = bpy.props.BoolProperty(name="Expand", default=True)
+    bpy.app.handlers.load_post.append(reload_handler)
+    bpy.app.handlers.depsgraph_update_post.append(coloring_checker)
+
+
+def unregister():
+    unreg()
+    bpy.app.handlers.load_post.remove(reload_handler)
+    bpy.app.handlers.depsgraph_update_post.remove(coloring_checker)
+    del bpy.types.Node.ac_expand
+    del bpy.types.Scene.colorista_prop

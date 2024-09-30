@@ -74,9 +74,9 @@ class Timer:
             ...
 
 
-def timer_reg():
+def register():
     Timer.reg()
 
 
-def timer_unreg():
+def unregister():
     Timer.unreg()

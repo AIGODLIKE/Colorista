@@ -1,11 +1,8 @@
-from .timer import timer_reg, timer_unreg
+import bpy
 
+modules = (
+    "timer",
+    "watcher",
+)
 
-def register_util():
-    """Register all the utils."""
-    timer_reg()
-
-
-def unregister_util():
-    """Unregister all the utils."""
-    timer_unreg()
+register, unregister = bpy.utils.register_submodule_factory(__package__, modules)
