@@ -18,70 +18,105 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 · Support both Chinese and English
 
-## Use
+## Use Composer Colorista VI
 
-### AGX Color Space De-hazing Series
+### Correction Series
 
-**AGX De-hazing**: Applicable to the AGX color space. When enabled, it removes the hazy appearance, significantly improving image clarity. It is recommended to maximize the parameter.
+**Automatic White Balance** : Automatically adjusts color balance based on lighting conditions, making the whites in the image appear natural.
 
+**Automatic Black and White Field** : This feature automatically adjusts the pure white and pure black areas in the image. It is recommended to set the parameters to maximum; the effect is best in Agx mode, while the standard mode may result in overexposure.
 
-**Saturation De-hazing weight**: Adjusted when AGX De-hazing is enabled. At 0, AGX De-hazing only affects brightness; at 1, it also affects saturation. This helps prevent the image from becoming overly saturated.
-
-**Soft De-Gray/Violent De-Grey**: Used after enabling AGX De-hazing. Soft De-hazing and Aggressive De-hazing are different de-hazing methods. The aggressive mode makes the image clearer but can be too glaring.
+**Automatic Gray Field** : Automatically adjusts the gray areas, achieving excellent results in standard color space.
 
 <a>
   <img src="https://github.com/user-attachments/assets/e6505ef4-7c30-4bc8-8fec-52024dfcc412" alt="image" width="500">
 </a>
 
-### Color Temperature, Tint, and Exposure
 
-**Color Temperature**：Adjusts the warmth or coolness of the image. Moving left leans towards cool (blue), while moving right leans towards warm (yellow), suitable for setting the overall atmosphere.
+**Gamma Correction** : Applied for gamma correction.
+
+### Brightness Adjustment Series
+
+**Natural Exposure** : Natural exposure adjustment is also used to regulate the overall exposure level, but it has a softer effect and is less intense, making it suitable for more delicate exposure adjustments.
+
+**Exposure Adjustment** : Used to process areas that are overexposed or approaching overexposure. By employing highlight compression, it can recover slightly overexposed highlight areas and restore details in the bright regions.
+
+**Brightness Control** : Controls the overall brightness of the highlight areas in the image. This parameter has a wide range but offers a gentle effect, making it suitable for adjusting the highlights as a whole.
+
+**Shadow Adjustment** : Adjusts the brightness of the shadow areas in the image. This parameter has a wide range but offers a gentle effect, making it suitable for controlling the overall brightness of the shadows in the image.
+
+**Midtone Adjustment** : By adjusting the brightness of the midtones in the image, you can further optimize the overall balance. This adjustment helps maintain the image’s sense of depth and layering.
+
+**Highlight Adjustment** : Specifically adjusts the brightness of the brightest areas in the image. Compared to the “Whites” adjustment, it has a narrower range but a stronger effect, making it suitable for fine-tuning the highlight regions.
+
+**Shadow Adjustment** : Adjusts the brightness of the darkest areas in the image. This adjustment has a narrower range but a more pronounced effect compared to the “Blacks” adjustment, making it suitable for fine-tuning the brightness of the shadow regions.
+
+### Contrast Series
+
+**Intelligent Contrast** : Intelligent contrast offers a more nuanced adjustment approach, selectively affecting the contrast of different areas in the image. It is recommended to set this parameter to the maximum value initially and then make adjustments based on the actual effect to achieve the best results.
+
+**Contrast** : Contrast is a key parameter that affects the brightness differences in an image, reflecting the degree of difference between the brightest and darkest parts. By appropriately adjusting the contrast, you can enhance the visual depth and sense of layering in the image.
+
+### Visual Clarity Series
+
+**Clarity** : This parameter is specifically designed to enhance the local contrast of an image, often used to boost mid-frequency details. By doing so, it makes the image appear more three-dimensional and sharper.
+
+**Texture** : This parameter is primarily used to adjust mid-level details. It does not affect the overall contrast or edge details but focuses on enhancing or softening subtle details in the image, such as skin texture or the surface texture of objects.
+
+**Natural Sharpening** : Natural sharpening is a technique that enhances the sharpness of an image without introducing noise and with minimal halo effects. Compared to clarity adjustments, natural sharpening allows for more precise control over the image’s sharpness without significantly affecting the contrast of larger areas. This method ensures that fine details are enhanced while maintaining a natural appearance, making it particularly useful for preserving the integrity of textures and details without compromising overall image quality.
+
+**Sharpening** : Similar to traditional sharpening tools, excessively high sharpening values can introduce image noise and may cause the overall image to darken. It is advisable to use this adjustment in conjunction with a noise reduction parameter. A common recommendation is to set the noise reduction value to about half of the sharpening value to effectively mitigate the noise introduced by sharpening while preserving detail. This balanced approach helps maintain image quality and ensures that enhancements do not compromise the overall appearance.
+
+**Noise Reduction** : Noise reduction is used to minimize the noise in an image caused by contrast between light and dark areas. However, it is important to note that this adjustment cannot eliminate noise resulting from under-sampling. If the noise reduction value is set too high, it may lead to a loss of fine details in the image. Therefore, it is recommended to use it in conjunction with sharpening tools, where the noise reduction value is ideally set to about half of the sharpening value. This balanced approach helps maintain detail while effectively reducing noise, resulting in a cleaner and more visually appealing image.
+
+### Color Tone Adjustment
+
+**Scene Hue Shift (RGB) ** : **Regular Adjustment of Scene Hue**.
+
+**Scene Hue Shift (Lab) ** : Adjusting Scene Hue in LAB Mode.
+
+**Color Temperature (Cool/Warm)** : Adjusting the color temperature can shift the image towards cooler or warmer tones. Lowering the color temperature value will make the image cooler (with a blue tint), while increasing the color temperature will make the image warmer (with a yellow or orange tint).
 
 <a>
   <img src="https://github.com/user-attachments/assets/1801c48d-887a-4956-ae2a-e30090abaa7a" alt="image" width="500">
 </a>
 
-**Tint**：Adjusts the image towards green or purple, ideal for correcting color balance and ensuring a natural tone.
 
-**Exposure** Adjusts the overall brightness, useful for correcting overexposed or underexposed images, and adjusting the overall light level.
+**Dyeing Target Color** : Users can choose the target color they want the image to lean towards. Once the color is selected, the overall color tendency of the image can be adjusted by modifying the dyeing intensity.
 
-### Highlights/Shadows/Whites/Blacks Series
-
-**Highlights**:Affects the brightest areas of the image. Though the range is small, the intensity enhancement is stronger than the white adjustment, ideal for fine-tuning.
-
-**Shadows**:Adjusts the brightness of the darkest areas. The range is small, but the effect is more pronounced, with stronger impact than the black adjustment.
-
-**Whites**:Controls the overall brightness of light areas. The range is large but the effect is subtle, suitable for broad light area adjustments.
-
-**Blacks**:Adjusts the overall brightness of dark areas. The range is wide, and the effect is smooth, used to control the brightness level of the entire dark area.
+**Target Color Dyeing Intensity** : Control the dyeing intensity of the currently selected target color. The higher the dyeing intensity value, the stronger the image’s color tendency towards the target color; conversely, a lower value will result in a weaker tendency.
 
 ### Saturation Series
 
-**Intelligent Saturation**:Automatically adjusts saturation, enhancing some areas while reducing others. If the image saturation is already as desired, this parameter may not have a noticeable effect.
+**Intelligent Saturation** : Intelligent saturation is a more refined tool that selectively adjusts the saturation of certain areas based on the image’s contrast and existing saturation distribution, making the adjustment effect more precise. It is recommended to initially set it to the highest value and then gradually it while observing the image to achieve the best results.
 
-**Natural Saturation**:Prioritizes enhancing low-saturation areas, making the colors appear more natural, suitable for handling hazy regions.
+**Natural Saturation** : This parameter primarily focuses on areas of low saturation in the image, aiming to maintain a natural look and avoid making colors appear overly exaggerated or distorted.
 
-**Contrast Saturation**:Prioritizes enhancing high-saturation areas, highlighting dominant colors and making the image more visually impactful.
+**Contrast Saturation** : Focuses on areas of high saturation in the image; excessively high values may lead to color distortion or make the image appear unnatural. Moderate adjustments can enhance or reduce the contrast effect in these areas.
 
-**Saturation**:Controls the overall saturation, adjusting the intensity of colors, and is an essential parameter for color adjustment.
-
-### Contrast and Sharpness Series
-
-**Intelligent Contrast**:Adjusts based on the contrast distribution of the image. Sliding left reduces contrast automatically, with varying intensity across different regions; sliding right increases contrast, again varying by region. If the contrast is already ideal, there may be no significant change.
-
-**Contrast**:Manually adjusts the brightness and darkness contrast, enhancing the sense of depth and making the image more three-dimensional.
-
-**Sharpness**:Controls the sharpness or blurriness of the image.
+**Saturation** : Saturation directly affects the intensity or vividness of colors in an image. Increasing saturation makes colors more vibrant, while decreasing saturation results in softer colors.
 
 ### Desaturation
 
-**Desaturation**:On the left, displays a black-and-white map of the image’s saturation distribution for better observation of saturation levels; on the right, shows a luminance distribution map for assessing overall brightness.
+**Desaturation (Saturation/Contrast)** : Observe the saturation distribution on the left and the brightness distribution on the right.
 
-### Glow 
+### Suosuo Effects Series
 
-**Glow Intensity**:Controls the glow effect of the scene. After AGX De-hazing is enabled, the glow effect becomes more pronounced but is not mandatory.
+**Glow Intensity** : Control the glow effect of the scene.
 
-**Glow Threshold**:Controls at what brightness level the glow effect appears. A lower threshold allows glow to appear in lower-brightness areas.
+**Starburst Intensity** : Create a star-like glow effect in the scene.
+
+** Lens Distortion** : Distort the lens; sliding to the right shows color, while sliding to the left shows no color.
+
+**Blend Colors/Film Grain** : The film grain is very subtle.
+
+**Mosaic Effect/Black and White Striped Pattern** : It will transition to the feel of early black and white comics as you move to the right.
+
+### RGB Curves
+
+### Color Balance
+
+### Hue Correct
 
 ## limitation
 
