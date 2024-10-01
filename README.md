@@ -18,6 +18,14 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 · Support both Chinese and English
 
+· Synchronized color management
+
+· Support historical records
+
+![image](https://github.com/user-attachments/assets/97c37c09-dfe1-465f-b47e-d76ecdc1f576)
+
+
+
 ## Use Composer Colorista VI
 
 ### Correction Series
@@ -118,9 +126,20 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 ### Hue Correct
 
-## limitation
+## Create your own presets
 
-· Specially designed for AGX, other modes may have slightly inferior effects
+1. Open the Composing panel and connect your nodes/node groups.
+   
+2. On the label of the node/node group you want to display on the panel, fill in the serial number, such as 01, 02, 03, 04, etc
+   
+3. Save the file and place it in the Colorista \ resource \ EN \ your folder
+   
+4. If you need a thumbnail, you can consider A The combination of Blend and A.png
+
+   ![image](https://github.com/user-attachments/assets/5ff67630-6f23-4902-ba9f-f167f1a9fb65)
+
+
+## limitation
 
 · Incorrect ACES settings are not recommended for use
 
