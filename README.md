@@ -136,7 +136,8 @@ A convenient color grading add-on designed for colorists, allowing for one click
    
 4. If you need a thumbnail, you can consider A The combination of Blend and A.png
 
-   ![image](https://github.com/user-attachments/assets/5ff67630-6f23-4902-ba9f-f167f1a9fb65)
+  ![image](https://github.com/user-attachments/assets/8b65b899-2bb8-4028-9a16-afd3a98bb936)
+
 
 
 ## limitation
