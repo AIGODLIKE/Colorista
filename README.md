@@ -16,11 +16,14 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 · Directly available specialized color palette panel
 
-· Support both Chinese and English
-
 · Synchronized color management
 
 · Support historical records
+
+· Support preset settings
+
+· Support both Chinese and English
+
 
 ![image](https://github.com/user-attachments/assets/97c37c09-dfe1-465f-b47e-d76ecdc1f576)
 
@@ -126,7 +129,7 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 ### Hue Correct
 
-## Create your own presets
+## Create your own project
 
 1. Open the Composing panel and connect your nodes/node groups.
    
@@ -141,6 +144,8 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 
 ## limitation
+
+· The principle of presets is to save files. If you make changes, the presets will not be synchronized. Please save again.
 
 · Incorrect ACES settings are not recommended for use
 
