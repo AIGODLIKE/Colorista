@@ -79,9 +79,9 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 ### Color Tone Adjustment
 
-**Scene Hue Shift (RGB) ** : **Regular Adjustment of Scene Hue**.
+**Scene Hue Shift (RGB)** : Regular Adjustment of Scene Hue.
 
-**Scene Hue Shift (Lab) ** : Adjusting Scene Hue in LAB Mode.
+**Scene Hue Shift (Lab)** : Adjusting Scene Hue in LAB Mode.
 
 **Color Temperature (Cool/Warm)** : Adjusting the color temperature can shift the image towards cooler or warmer tones. Lowering the color temperature value will make the image cooler (with a blue tint), while increasing the color temperature will make the image warmer (with a yellow or orange tint).
 
