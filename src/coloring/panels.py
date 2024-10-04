@@ -140,7 +140,8 @@ class ColoristaHistoryPanel(bpy.types.Panel):
     bl_label = "Colorista History"
     bl_idname = "COLORISTA_PT_History"
     bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"  # hack hide panel
+    bl_region_type = "WINDOW"
+    bl_options = {"INSTANCED"}
 
     def draw(self, context: Context):
         sce = bpy.context.scene
