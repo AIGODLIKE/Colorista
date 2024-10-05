@@ -266,7 +266,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             bpy.ops.colorista.save_preset(preset=path.as_posix(), popup=False)
             update_history()
 
-        sce.view_settings.view_transform = "AgX"
+        # sce.view_settings.view_transform = "AgX"
         # 2. 判断软件版本如果是4.2默认合成模式切换到gpu
         if (4, 2) <= bpy.app.version <= (4, 3):
             sce.render.compositor_device = "GPU"
