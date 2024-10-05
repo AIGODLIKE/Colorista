@@ -16,7 +16,7 @@ class Preferences(bpy.types.AddonPreferences):
     bl_idname = get_package()
 
     use_asset_color_space_pref: bpy.props.BoolProperty(default=True,
-                                                       name="Use Asset Color Space",
+                                                       name="Use Asset Color Management",
                                                        translation_context=PROP_TCTX)
 
     ui_icon_scale: bpy.props.FloatProperty(default=8,
