@@ -1,4 +1,4 @@
-schema_version = "1.1.0"
+schema_version = "1.1.1"
 
 # Example of manifest file for a Blender extension
 # Change the values according to your extension
