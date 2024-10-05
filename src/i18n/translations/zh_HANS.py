@@ -13,7 +13,7 @@ translations = (
     ("Last Preset", "上一个", PROP_TCTX),
     ("Next Preset", "下一个", PROP_TCTX),
     ("Save Name", "存储名", PROP_TCTX),
-    ("Use Asset Color Space", "同步资产色彩空间", PROP_TCTX),
+    ("Use Asset Color Management", "使用资产色彩管理", PROP_TCTX),
     ("UI Icon Scale", "UI图标尺寸", PROP_TCTX),
     ("Gizmo Offset", "Gizmo控件偏移", PROP_TCTX),
     ("Cache Compositor", "缓存当前合成树", PROP_TCTX),
