@@ -90,8 +90,11 @@ class ColoristaSavePreset(bpy.types.Operator):
                 node.scene = None
 
     def copy_scene_settings(self, sf: bpy.types.Scene, st: bpy.types.Scene):
-        st.display_settings.display_device = sf.display_settings.display_device
-        st.view_settings.view_transform = sf.view_settings.view_transform
+        try:
+            st.display_settings.display_device = sf.display_settings.display_device
+            st.view_settings.view_transform = sf.view_settings.view_transform
+        except TypeError:
+            pass
 
     def copy_scene(self, sf: bpy.types.Scene, st: bpy.types.Scene):
         self.copy_scene_settings(sf, st)
@@ -218,8 +221,11 @@ class CompositorNodeTreeImport(bpy.types.Operator):
     def sync_settings(self, current_sce: bpy.types.Scene, loaded_sce: bpy.types.Scene):
         if not get_pref().use_asset_color_space_pref:
             return
-        current_sce.display_settings.display_device = loaded_sce.display_settings.display_device
-        current_sce.view_settings.view_transform = loaded_sce.view_settings.view_transform
+        try:
+            current_sce.display_settings.display_device = loaded_sce.display_settings.display_device
+            current_sce.view_settings.view_transform = loaded_sce.view_settings.view_transform
+        except TypeError:
+            pass
 
     def load_compositor_node_tree(self, load_sces: set[bpy.types.Scene]):
         if not load_sces:
