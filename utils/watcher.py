@@ -1,7 +1,6 @@
 import queue
 import time
 import platform
-from threading import Thread
 from pathlib import Path
 from functools import lru_cache
 from .logger import logger
@@ -21,6 +20,7 @@ class FSWatcher:
     _watcher_callback = {}
     _watcher_queue = queue.Queue()
     _running = False
+    _use_threading = False
 
     @classmethod
     def init(cls) -> None:
@@ -45,20 +45,43 @@ class FSWatcher:
         if cls._running:
             return
         cls._running = True
-        Thread(target=cls._loop, daemon=True).start()
-        Thread(target=cls._run_ex, daemon=True).start()
+        if cls._use_threading:
+            # use threading
+            from threading import Thread
+            Thread(target=cls._loop, daemon=True).start()
+            Thread(target=cls._run_ex, daemon=True).start()
+        else:
+            # use timer
+            import bpy
+            bpy.app.timers.register(cls._loop_timer, persistent=True)
+            bpy.app.timers.register(cls._run_ex_timer, persistent=True)
+
+    @classmethod
+    def _run_ex_timer(cls):
+        cls._run_ex_one()
+        return 0.5
 
     @classmethod
     def _run_ex(cls):
         while cls._running:
-            try:
-                path = cls._watcher_queue.get(timeout=0.1)
-                if path not in cls._watcher_path:
-                    continue
-                if callback := cls._watcher_callback[path]:
-                    callback(path)
-            except queue.Empty:
-                pass
+            cls._run_ex_one()
+            time.sleep(0.1)
+
+    @classmethod
+    def _run_ex_one(cls):
+        if not cls._running:
+            return
+        while not cls._watcher_queue.empty():
+            path = cls._watcher_queue.get()
+            if path not in cls._watcher_path:
+                continue
+            if callback := cls._watcher_callback[path]:
+                callback(path)
+
+    @classmethod
+    def _loop_timer(cls):
+        cls._loop_one()
+        return 1
 
     @classmethod
     def _loop(cls):
@@ -66,19 +89,24 @@ class FSWatcher:
             监听所有注册的路径, 有变化时记录为changed
         """
         while cls._running:
-            # list() avoid changed while iterating
-            for path, changed in list(cls._watcher_path.items()):
-                if changed:
-                    continue
-                if not path.exists():
-                    continue
-                mtime = path.stat().st_mtime_ns
-                if cls._watcher_stat.get(path, None) == mtime:
-                    continue
-                cls._watcher_stat[path] = mtime
-                cls._watcher_path[path] = True
-                cls._watcher_queue.put(path)
+            cls._loop_one()
             time.sleep(0.5)
+
+    @classmethod
+    def _loop_one(cls):
+        if not cls._running:
+            return
+        for path, changed in list(cls._watcher_path.items()):
+            if changed:
+                continue
+            if not path.exists():
+                continue
+            mtime = path.stat().st_mtime_ns
+            if cls._watcher_stat.get(path, None) == mtime:
+                continue
+            cls._watcher_stat[path] = mtime
+            cls._watcher_path[path] = True
+            cls._watcher_queue.put(path)
 
     @classmethod
     def stop(cls):
