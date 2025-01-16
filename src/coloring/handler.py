@@ -43,6 +43,36 @@ def update_others(_):
 
 
 @bpy.app.handlers.persistent
+def update_custom_color_space(_):
+    tree = bpy.context.scene.node_tree
+    if not tree:
+        return
+    color_space_control = tree.nodes.get("clorista-Color Space")
+    if not color_space_control:
+        return
+    space = color_space_control.inputs.get("Space")
+    if not space:
+        return
+    try:
+        color_space = float(space.default_value)
+        ori_space_type = bpy.context.scene.display_settings.display_device
+        space_type = ori_space_type
+        if abs(color_space) < 0.001:
+            # AgX
+            space_type = "AgX"
+        elif abs(color_space - 0.1) < 0.001:
+            space_type = "Standard"
+        elif abs(color_space - 0.2) < 0.001:
+            space_type = "Filmic"
+        elif abs(color_space - 0.3) < 0.001:
+            space_type = "Khronos PBR Neutral"
+        if space_type != ori_space_type:
+            bpy.context.scene.display_settings.display_device = space_type
+    except Exception:
+        pass
+
+
+@bpy.app.handlers.persistent
 def update_node_group(scene):
     # 获取当前场景的节点树，并找到主节点组
     main_node_tree = scene.node_tree
@@ -85,6 +115,7 @@ def update_node_group(scene):
 
 def register():
     DepsgraphPostHandler.add(update_node_group)
+    DepsgraphPostHandler.add(update_custom_color_space)
     DepsgraphPostHandler.add(update_others)
     DepsgraphPostHandler.register()
 
