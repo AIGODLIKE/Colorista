@@ -59,10 +59,51 @@ def set_attr_if_not_equal(obj, attr, value):
         ...
 
 
+def has_custom_vt_control() -> bool:
+    tree = bpy.context.scene.node_tree
+    if not tree:
+        return
+    color_space_control = tree.nodes.get("clorista-Color Space")
+    if not color_space_control:
+        return
+    if not color_space_control.inputs:
+        return
+    space = color_space_control.inputs.get("Space")
+    if not space:
+        space = color_space_control.inputs[0]
+    return True
+
+
+def update_custom_vt():
+    if not has_custom_vt_control():
+        return
+    tree = bpy.context.scene.node_tree
+    color_space_control = tree.nodes.get("clorista-Color Space")
+    space = color_space_control.inputs.get("Space")
+    try:
+        color_space = float(space.default_value)
+        ori_vt = bpy.context.scene.view_settings.view_transform
+        vt = ori_vt
+        if abs(color_space) < 0.001:
+            # AgX
+            vt = "AgX"
+        elif abs(color_space - 0.1) < 0.001:
+            vt = "Standard"
+        elif abs(color_space - 0.2) < 0.001:
+            vt = "Filmic"
+        elif abs(color_space - 0.3) < 0.001:
+            vt = "Khronos PBR Neutral"
+        if vt != ori_vt:
+            bpy.context.scene.view_settings.view_transform = vt
+    except Exception:
+        pass
+
+
 def update_color_manager():
     if not bpy.context.scene.colorista_prop.enable_coloring:
         return
-    set_attr_if_not_equal(bpy.context.scene.view_settings, "view_transform", "Raw")
+    if not has_custom_vt_control():
+        set_attr_if_not_equal(bpy.context.scene.view_settings, "view_transform", "Raw")
     set_attr_if_not_equal(bpy.context.scene.view_settings, "look", "None")
     set_attr_if_not_equal(bpy.context.scene.view_settings, "exposure", 0)
     set_attr_if_not_equal(bpy.context.scene.view_settings, "gamma", 1)
@@ -72,6 +113,7 @@ def update_color_manager():
 def register():
     UpdateTimer1s.add(update_device)
     UpdateTimer1s.add(update_color_manager)
+    UpdateTimer1s.add(update_custom_vt)
     UpdateTimer1s.register()
 
 
