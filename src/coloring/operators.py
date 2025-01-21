@@ -5,6 +5,7 @@ from ...utils.common import get_resource_dir_locale, get_resource_dir
 from ...utils.node import copy_node_properties
 from ..i18n import _T
 from .properties import Props
+from .utils import set_viewport_shading
 from pathlib import Path
 from datetime import datetime
 
@@ -277,7 +278,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         if (4, 2) <= bpy.app.version <= (4, 3):
             sce.render.compositor_device = "GPU"
         # 4. 状态开启
-        bpy.context.space_data.shading.use_compositor = "ALWAYS"
+        set_viewport_shading("ALWAYS")
         bpy.context.scene.use_nodes = True
         sce.node_tree.nodes.clear()  # 加载前清理节点树
         load_sce = self.load_compositor_sce(preset)
