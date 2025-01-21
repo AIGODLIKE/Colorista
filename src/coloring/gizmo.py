@@ -1,5 +1,6 @@
 import bpy
 from bpy.types import Context
+from .utils import toggle_viewport_shading
 from ..preference import get_pref
 
 
@@ -40,11 +41,7 @@ class ColoristaGzOps(bpy.types.Operator):
         return context.area.ui_type == "VIEW_3D"
 
     def execute(self, context):
-        shading = context.space_data.shading
-        if shading.use_compositor == "ALWAYS":
-            shading.use_compositor = "DISABLED"
-        else:
-            shading.use_compositor = "ALWAYS"
+        toggle_viewport_shading()
         return {'FINISHED'}
 
 
