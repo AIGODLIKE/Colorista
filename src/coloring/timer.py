@@ -59,11 +59,14 @@ def set_attr_if_not_equal(obj, attr, value):
         ...
 
 
+VTC_NAME = "colorista-Color Space"
+
+
 def has_custom_vt_control() -> bool:
     tree = bpy.context.scene.node_tree
     if not tree:
         return
-    color_space_control = tree.nodes.get("clorista-Color Space")
+    color_space_control = tree.nodes.get(VTC_NAME)
     if not color_space_control:
         return
     if not color_space_control.inputs:
@@ -78,23 +81,33 @@ def update_custom_vt():
     if not has_custom_vt_control():
         return
     tree = bpy.context.scene.node_tree
-    color_space_control = tree.nodes.get("clorista-Color Space")
+    color_space_control = tree.nodes.get(VTC_NAME)
     space = color_space_control.inputs.get("Space")
     try:
         color_space = float(space.default_value)
         ori_vt = bpy.context.scene.view_settings.view_transform
-        vt = ori_vt
-        if abs(color_space) < 0.001:
-            # AgX
-            vt = "AgX"
-        elif abs(color_space - 0.1) < 0.001:
-            vt = "Standard"
-        elif abs(color_space - 0.2) < 0.001:
-            vt = "Filmic"
-        elif abs(color_space - 0.3) < 0.001:
-            vt = "Khronos PBR Neutral"
-        if vt != ori_vt:
-            bpy.context.scene.view_settings.view_transform = vt
+        space_value_map = {
+            "AgX": 0,
+            "Standard": 0.1,
+            "Filmic": 0.2,
+            "Khronos PBR Neutral": 0.3,
+        }
+        space_value = space_value_map.get(ori_vt, 0)
+        if abs(space_value - color_space) < 0.00001:
+            return
+        space.default_value = space_value
+        # vt = ori_vt
+        # if abs(color_space) < 0.001:
+        #     # AgX
+        #     vt = "AgX"
+        # elif abs(color_space - 0.1) < 0.001:
+        #     vt = "Standard"
+        # elif abs(color_space - 0.2) < 0.001:
+        #     vt = "Filmic"
+        # elif abs(color_space - 0.3) < 0.001:
+        #     vt = "Khronos PBR Neutral"
+        # if vt != ori_vt:
+        #     bpy.context.scene.view_settings.view_transform = vt
     except Exception:
         pass
 
