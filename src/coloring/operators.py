@@ -65,6 +65,14 @@ class ColoristaSavePreset(bpy.types.Operator):
         # nt.width = nf.width
         # nt.height = nf.height
 
+    def copy_drivers(self, sf: bpy.types.Scene, st: bpy.types.Scene):
+        if not sf.node_tree.animation_data:
+            return
+        if not st.node_tree.animation_data:
+            st.node_tree.animation_data_create()
+        for driver in sf.node_tree.animation_data.drivers:
+            st.node_tree.animation_data.drivers.from_existing(src_driver=driver)
+
     def copy_compositor(self, sf: bpy.types.Scene, st: bpy.types.Scene):
         st.use_nodes = True
         st.node_tree.nodes.clear()
@@ -100,6 +108,7 @@ class ColoristaSavePreset(bpy.types.Operator):
     def copy_scene(self, sf: bpy.types.Scene, st: bpy.types.Scene):
         self.copy_scene_settings(sf, st)
         self.copy_compositor(sf, st)
+        self.copy_drivers(sf, st)
 
     def execute(self, context: bpy.types.Context):
         path = self.get_preset_path()
