@@ -15,7 +15,7 @@ def get_pref() -> Preferences:
 class Preferences(bpy.types.AddonPreferences):
     bl_idname = get_package()
 
-    use_asset_color_space_pref: bpy.props.BoolProperty(default=True,
+    use_asset_color_space_pref: bpy.props.BoolProperty(default=False,
                                                        name="Use Asset Color Management",
                                                        translation_context=PROP_TCTX)
 
