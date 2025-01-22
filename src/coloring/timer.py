@@ -113,6 +113,7 @@ def update_custom_vt():
 
 
 def update_color_manager():
+    return
     if not bpy.context.scene.colorista_prop.enable_coloring:
         return
     if not has_custom_vt_control():
