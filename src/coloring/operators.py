@@ -268,9 +268,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             r_layer.scene = sce
             r_layer.layer = bpy.context.view_layer.name
         self.sync_settings(sce, load_sce)
-        # 暂时不做缓存, 直接删除
-        for ls in all_scenes:
-            bpy.data.scenes.remove(ls)
+        self.copy_drivers(load_sce, sce)
 
     def enable_coloring_f(self, preset):
         sce = bpy.context.scene
@@ -290,10 +288,56 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         set_viewport_shading("ALWAYS")
         bpy.context.scene.use_nodes = True
         sce.node_tree.nodes.clear()  # 加载前清理节点树
+        old_nts = set(bpy.data.node_groups)
         load_sce = self.load_compositor_sce(preset)
+        new_nts = set(bpy.data.node_groups) - old_nts
         self.load_compositor_node_tree(load_sce)
+        # 场景重置所有使用 load_sce 场景的nodetree驱动器
+        for nt in new_nts:
+            # 重载驱动器
+            self.reset_driver_with_scene_ref(nt.animation_data, load_sce)
+        # 暂时不做缓存, 直接删除
+        for ls in load_sce:
+            bpy.data.scenes.remove(ls)
         if load_sce:
             logger.info(_T("Load Compositor: {}").format(preset))
+        new_nts.add(sce.node_tree)
+        for nt in new_nts:
+            # 重载驱动器
+            self.reload_drivers(nt.animation_data)
+
+    def copy_drivers(self, sf: bpy.types.Scene, st: bpy.types.Scene):
+        if not sf.node_tree.animation_data:
+            return
+        if not st.node_tree.animation_data:
+            st.node_tree.animation_data_create()
+        for driver in sf.node_tree.animation_data.drivers:
+            st.node_tree.animation_data.drivers.from_existing(src_driver=driver)
+
+    def reset_driver_with_scene_ref(self, an: bpy.types.AnimData, scenes: set[bpy.types.Scene]):
+        if not an or not scenes:
+            return
+
+        def is_scene_ref(v: bpy.types.ChannelDriverVariables, scenes: set[bpy.types.Scene]):
+            if v.type != "SINGLE_PROP":
+                return False
+            for t in v.targets:
+                if t.id_type == "SCENE" and t.id in scenes:
+                    return True
+            return False
+
+        for d in an.drivers:
+            for v in d.driver.variables:
+                if not is_scene_ref(v, scenes):
+                    continue
+                v.type = "CONTEXT_PROP"
+
+    def reload_drivers(self, an: bpy.types.AnimData):
+        if not an:
+            return
+        targets = [t for d in an.drivers for v in d.driver.variables for t in v.targets if v.type == "CONTEXT_PROP"]
+        for t in targets:
+            t.data_path = t.data_path
 
     def execute(self, context: bpy.types.Context):
         preset = bpy.context.scene.colorista_prop.asset
