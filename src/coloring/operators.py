@@ -228,6 +228,38 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             sce = None
         return sce
 
+    def sync_view_layer_passs(self, vf: bpy.types.ViewLayer, vt: bpy.types.ViewLayer):
+        import inspect
+        # 查找 use_pass 开头的属性
+        for name, value in inspect.getmembers(vf):
+            if not name.startswith("use_pass"):
+                pass
+            try:
+                setattr(vt, name, value)
+            except AttributeError:
+                pass
+        # 查找 cycles 属性
+        for name, value in inspect.getmembers(getattr(vf, "cycles", None)):
+            if not name.startswith("use_pass"):
+                pass
+            try:
+                setattr(vt.cycles, name, value)
+            except AttributeError:
+                pass
+        for name, value in inspect.getmembers(getattr(vf, "eevee", None)):
+            if not name.startswith("use_pass"):
+                pass
+            try:
+                setattr(vt.eevee, name, value)
+            except AttributeError:
+                pass
+        cy_addition_pass = ["denoising_store_passes", "pass_debug_sample_count"]
+        for ap in cy_addition_pass:
+            try:
+                setattr(vt.cycles, ap, getattr(vf.cycles, ap))
+            except AttributeError:
+                pass
+
     def sync_settings(self, current_sce: bpy.types.Scene, loaded_sce: bpy.types.Scene):
         if not get_pref().use_asset_color_space_pref:
             return
@@ -248,21 +280,46 @@ class CompositorNodeTreeImport(bpy.types.Operator):
                 break
         # 从 load_scene 复制 compositor节点树到当前场景
         sce = bpy.context.scene
+        # 同步渲染引擎
+        sce.render.engine = load_sce.render.engine
+        bpy.context.view_layer.update()
+        # 同步通道设置
+        if load_sce.view_layers:
+            self.sync_view_layer_passs(load_sce.view_layers[0], bpy.context.view_layer)
         node_map = {}
         r_layer: bpy.types.CompositorNodeRLayers = None
         for nf in load_sce.node_tree.nodes:
+            if nf.bl_idname == "NodeUndefined":
+                logger.error(f"NodeUndefined: {nf.name}")
+                continue
             nt = sce.node_tree.nodes.new(type=nf.bl_idname)
             if nt.type == "GROUP":
                 nt.node_tree = nf.node_tree
             if nf.type == "R_LAYERS":
                 r_layer = nt
+            if nf.bl_idname == "CompositorNodeOutputFile":
+                nt.file_slots.clear()
+                for i, inp in enumerate(nf.inputs):
+                    nt.file_slots.new(inp.identifier)
+                    # _ = nt.inputs.new(inp.bl_idname, inp.name, identifier=inp.identifier)
+                    nt.file_slots[i].path = nf.file_slots[i].path
+                    nt.file_slots[i].use_node_format = nf.file_slots[i].use_node_format
             copy_node_properties(nf, nt)
             node_map[nf.name] = nt
         for link in load_sce.node_tree.links:
+            if nf.bl_idname == "NodeUndefined":
+                logger.error(f"NodeUndefined: {nf.name}")
+                continue
             fnode = node_map[link.from_node.name]
             tnode = node_map[link.to_node.name]
-            fsocket = fnode.outputs[link.from_socket.identifier]
-            tsocket = tnode.inputs[link.to_socket.identifier]
+            fsocket = fnode.outputs.get(link.from_socket.identifier)
+            tsocket = tnode.inputs.get(link.to_socket.identifier)
+            if not fsocket:
+                logger.error(f"Socket not found: {link.from_socket.identifier}")
+                continue
+            if not tsocket:
+                logger.error(f"Socket not found: {link.to_socket.identifier}")
+                continue
             sce.node_tree.links.new(tsocket, fsocket)
         if r_layer:
             r_layer.scene = sce
@@ -277,7 +334,10 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             from .cache_history import update_history
             name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             path = get_resource_dir() / f"cache/{name}.blend"
-            bpy.ops.colorista.save_preset(preset=path.as_posix(), popup=False)
+            try:
+                bpy.ops.colorista.save_preset(preset=path.as_posix(), popup=False)
+            except Exception as e:
+                logger.error(e)
             update_history()
 
         # sce.view_settings.view_transform = "AgX"

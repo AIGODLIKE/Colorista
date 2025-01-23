@@ -16,4 +16,10 @@ def copy_node_properties(nf: bpy.types.Node, nt: bpy.types.Node):
         except (AttributeError, TypeError):
             pass
     for inp in nf.inputs:
-        nt.inputs[inp.identifier].default_value = inp.default_value
+        if inp.identifier not in nt.inputs:
+            continue
+        try:
+            nt.inputs[inp.identifier].default_value = inp.default_value
+        except ValueError:
+            print("Error copying node property:", inp.identifier, nt.inputs[inp.identifier].default_value, inp.default_value)
+            pass
