@@ -1,5 +1,6 @@
 import bpy
 import traceback
+from functools import partial
 
 
 class UpdateTimer1s:
@@ -31,11 +32,12 @@ class UpdateTimer1s:
 
     @classmethod
     def register(cls):
-        bpy.app.timers.register(cls._run, first_interval=1, persistent=True)
+        cls._prun = partial(cls._run)
+        bpy.app.timers.register(cls._prun, first_interval=1, persistent=True)
 
     @classmethod
     def unregister(cls):
-        bpy.app.timers.unregister(cls._run)
+        bpy.app.timers.unregister(cls._prun)
         cls.timers.clear()
 
 
