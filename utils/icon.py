@@ -7,10 +7,10 @@ IMG_SUFFIX = {".png", ".jpg", ".jpeg"}
 
 class PrevMgr:
     import bpy
-    __PREV__: dict[int, bpy.utils.previews.ImagePreviewCollection] = {}
+    __PREV__: dict[int, "bpy.utils.previews.ImagePreviewCollection"] = {}
 
     @staticmethod
-    def new() -> bpy.utils.previews.ImagePreviewCollection:
+    def new() -> "bpy.utils.previews.ImagePreviewCollection":
         import bpy.utils.previews
         import random
         prev = bpy.utils.previews.new()
