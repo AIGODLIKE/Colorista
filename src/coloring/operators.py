@@ -281,7 +281,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         # 从 load_scene 复制 compositor节点树到当前场景
         sce = bpy.context.scene
         # 同步渲染引擎
-        sce.render.engine = load_sce.render.engine
+        # sce.render.engine = load_sce.render.engine
         bpy.context.view_layer.update()
         # 同步通道设置
         if load_sce.view_layers:
