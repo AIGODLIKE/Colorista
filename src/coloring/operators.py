@@ -1,4 +1,5 @@
 import bpy
+import traceback
 from ..preference import get_pref
 from ...utils.logger import logger
 from ...utils.common import get_resource_dir_locale, get_resource_dir
@@ -189,14 +190,20 @@ class CompositorNodeTreeImport(bpy.types.Operator):
     no_cache: bpy.props.BoolProperty(default=False)
 
     def rsc_used(self, rsc) -> bool:
-        return (rsc.users >= 1 and not rsc.use_fake_user) or rsc.users >= 2
+        try:
+            return (rsc.users >= 1 and not rsc.use_fake_user) or rsc.users >= 2
+        except ReferenceError:
+            return False
 
     def _load_compositor_scene(self, path):
         for group in list(Props.loaded_node_groups):
             if self.rsc_used(group):
                 continue
             Props.loaded_node_groups.discard(group)
-            bpy.data.node_groups.remove(group)
+            try:
+                bpy.data.node_groups.remove(group)
+            except ReferenceError:
+                pass
 
         old_groups = set(bpy.data.node_groups)
         old_scenes = set(bpy.data.scenes)
@@ -226,6 +233,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             sce = self._load_compositor_scene(data_path.as_posix())
         except Exception:
             sce = None
+            traceback.print_exc()
         return sce
 
     def sync_view_layer_passs(self, vf: bpy.types.ViewLayer, vt: bpy.types.ViewLayer):
