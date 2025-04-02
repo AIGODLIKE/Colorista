@@ -142,7 +142,10 @@ class Props(bpy.types.PropertyGroup):
 
     def get_preset(self):
         if "preset" not in self:
-            self["preset"] = 0
+            try:
+                self["preset"] = 0
+            except AttributeError:
+                return 0
         return self["preset"]
 
     preset: bpy.props.EnumProperty(name="Preset",
