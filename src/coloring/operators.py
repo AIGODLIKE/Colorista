@@ -92,9 +92,12 @@ class ColoristaSavePreset(bpy.types.Operator):
         for link in sf.node_tree.links:
             fnode = node_map[link.from_node.name]
             tnode = node_map[link.to_node.name]
-            fsocket = fnode.outputs[link.from_socket.identifier]
-            tsocket = tnode.inputs[link.to_socket.identifier]
-            st.node_tree.links.new(tsocket, fsocket)
+            try:
+                fsocket = fnode.outputs[link.from_socket.identifier]
+                tsocket = tnode.inputs[link.to_socket.identifier]
+                st.node_tree.links.new(tsocket, fsocket)
+            except KeyError:
+                print("KeyError:", link.from_node.name, link.to_node.name, link.from_socket.identifier)
         for node in st.node_tree.nodes:
             if node.type == "R_LAYERS":
                 node.scene = None
