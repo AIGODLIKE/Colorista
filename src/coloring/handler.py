@@ -1,7 +1,7 @@
 import bpy
 import re
 import traceback
-
+from ..preference import get_pref
 # 主节点组名称
 main_node_group_name = "Basic adjustment nodes for colorists"
 
@@ -39,12 +39,14 @@ class DepsgraphPostHandler:
 @bpy.app.handlers.persistent
 def update_others(_):
     from .timer import update_color_manager
+
     update_color_manager()
 
 
 @bpy.app.handlers.persistent
 def update_custom_vt(_):
     from .timer import update_custom_vt
+
     update_custom_vt()
 
 
@@ -89,12 +91,85 @@ def update_node_group(scene):
             print(f"输入编号 {input_index} 超出范围")
 
 
+class RenderHandler:
+    handlers: dict[str, dict[callable, None]] = {
+        "pre": {},
+        "post": {},
+        "init": {},
+        "complete": {},
+    }
+    ctx = {}
+
+    @classmethod
+    def add(self, handler: callable, stage="pre"):
+        if stage not in self.handlers:
+            raise ValueError(f"Invalid stage: {stage}")
+        self.handlers[stage][handler] = None
+
+    @classmethod
+    @bpy.app.handlers.persistent
+    def update_pre(self, scene, deps):
+        self.update_ex(scene, deps, "pre")
+
+    @classmethod
+    @bpy.app.handlers.persistent
+    def update_init(self, scene, deps):
+        self.update_ex(scene, deps, "init")
+
+    @classmethod
+    @bpy.app.handlers.persistent
+    def update_post(self, scene, deps):
+        self.update_ex(scene, deps, "post")
+
+    @classmethod
+    @bpy.app.handlers.persistent
+    def update_complete(self, scene, deps):
+        self.update_ex(scene, deps, "complete")
+
+    @classmethod
+    def update_ex(self, scene, deps, stage):
+        for handler in self.handlers[stage]:
+            try:
+                handler(self, scene)
+            except Exception:
+                traceback.print_exc()
+
+    @classmethod
+    def register(self):
+        bpy.app.handlers.render_init.append(self.update_init)
+        bpy.app.handlers.render_pre.append(self.update_pre)
+        bpy.app.handlers.render_post.append(self.update_post)
+        bpy.app.handlers.render_complete.append(self.update_complete)
+
+    @classmethod
+    def unregister(self):
+        bpy.app.handlers.render_init.remove(self.update_init)
+        bpy.app.handlers.render_pre.remove(self.update_pre)
+        bpy.app.handlers.render_post.remove(self.update_post)
+        bpy.app.handlers.render_complete.remove(self.update_complete)
+        self.handlers.clear()
+
+
+def switch_to_cpu_device(self: RenderHandler, scene: bpy.types.Scene):
+    self.ctx["old_compositor_device"] = scene.render.compositor_device
+    if get_pref().force_use_cpu_render_image:
+        scene.render.compositor_device = "CPU"
+
+
+def restore_render_device(self: RenderHandler, scene: bpy.types.Scene):
+    scene.render.compositor_device = self.ctx.get("old_compositor_device", "GPU")
+
+
 def register():
     DepsgraphPostHandler.add(update_node_group)
     DepsgraphPostHandler.add(update_custom_vt)
     DepsgraphPostHandler.add(update_others)
     DepsgraphPostHandler.register()
+    RenderHandler.add(switch_to_cpu_device, "pre")
+    RenderHandler.add(restore_render_device, "complete")
+    RenderHandler.register()
 
 
 def unregister():
     DepsgraphPostHandler.unregister()
+    RenderHandler.unregister()

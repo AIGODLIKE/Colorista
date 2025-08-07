@@ -1,3 +1,4 @@
+# type: ignore
 from __future__ import annotations
 import bpy
 
@@ -45,6 +46,8 @@ class Preferences(bpy.types.AddonPreferences):
                                                      max=100,
                                                      update=update_cache_current_cache_count,
                                                      translation_context=PROP_TCTX)
+
+    force_use_cpu_render_image: bpy.props.BoolProperty(name="Force Use CPU Render Image", default=False, translation_context=PROP_TCTX)
 
     def draw(self, context):
         layout = self.layout

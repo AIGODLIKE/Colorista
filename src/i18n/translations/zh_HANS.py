@@ -17,6 +17,7 @@ translations = (
     ("UI Icon Scale", "UI图标尺寸", PROP_TCTX),
     ("Gizmo Offset", "Gizmo控件偏移", PROP_TCTX),
     ("Cache Compositor", "缓存当前合成树", PROP_TCTX),
+    ("Force Use CPU Render Image", "强制使用CPU渲染图像", PROP_TCTX),
     ("Cache Count", "缓存合成树数量", PROP_TCTX),
     ("Load Compositor: {}", "加载成功: {}"),
     ("Overwrite preset: {}?", "是否覆盖 {}?"),

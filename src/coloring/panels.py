@@ -95,6 +95,8 @@ class ColoringPanel(bpy.types.Panel):
         row.prop(get_pref(), "use_asset_color_space_pref", text="", icon="FILE_REFRESH")
         row.alert = get_pref().cache_current_compositor
         row.prop(get_pref(), "cache_current_compositor", text="", icon="DOCUMENTS")
+        row.alert = get_pref().force_use_cpu_render_image
+        row.prop(get_pref(), "force_use_cpu_render_image", text="", icon="GEOMETRY_SET")
         row.alert = False
         row.popover(ColoristaHistoryPanel.bl_idname, text="", icon="RECOVER_LAST")
         row.operator("wm.url_open", text="", icon="URL").url = "https://github.com/AIGODLIKE/Colorista"
