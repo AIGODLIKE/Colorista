@@ -295,8 +295,8 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         # sce.render.engine = load_sce.render.engine
         bpy.context.view_layer.update()
         # 同步通道设置
-        if load_sce.view_layers:
-            self.sync_view_layer_passs(load_sce.view_layers[0], bpy.context.view_layer)
+        # if load_sce.view_layers:
+        #     self.sync_view_layer_passs(load_sce.view_layers[0], bpy.context.view_layer)
         node_map = {}
         r_layer: bpy.types.CompositorNodeRLayers = None
         for nf in load_sce.node_tree.nodes:
