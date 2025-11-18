@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 # Example of manifest file for a Blender extension
 # Change the values according to your extension
 id = "Colorista"
-version = "1.1.7"
+version = "1.1.8"
 name = "Colorista"
 tagline = "A convenient color grading add-on designed for colorists"
 maintainer = "AIGODLIKE <karrycharon@qq.com>"
