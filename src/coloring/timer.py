@@ -1,6 +1,7 @@
 import bpy
 import traceback
 from functools import partial
+from ...utils.node import get_comp_node_tree
 
 
 class UpdateTimer1s:
@@ -65,7 +66,7 @@ VTC_NAME = "colorista-Color Space"
 
 
 def has_custom_vt_control() -> bool:
-    tree = bpy.context.scene.node_tree
+    tree = get_comp_node_tree(bpy.context.scene)
     if not tree:
         return
     color_space_control = tree.nodes.get(VTC_NAME)
@@ -82,7 +83,7 @@ def has_custom_vt_control() -> bool:
 def update_custom_vt():
     if not has_custom_vt_control():
         return
-    tree = bpy.context.scene.node_tree
+    tree = get_comp_node_tree(bpy.context.scene)
     color_space_control = tree.nodes.get(VTC_NAME)
     space = color_space_control.inputs.get("Space")
     try:

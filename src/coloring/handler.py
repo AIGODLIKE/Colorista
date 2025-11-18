@@ -1,6 +1,7 @@
 import bpy
 import re
 import traceback
+from ...utils.node import get_comp_node_tree
 from ..preference import get_pref
 # 主节点组名称
 main_node_group_name = "Basic adjustment nodes for colorists"
@@ -53,7 +54,7 @@ def update_custom_vt(_):
 @bpy.app.handlers.persistent
 def update_node_group(scene):
     # 获取当前场景的节点树，并找到主节点组
-    main_node_tree = scene.node_tree
+    main_node_tree = get_comp_node_tree(scene)
     if not main_node_tree:
         # print("未找到场景的节点树")
         return

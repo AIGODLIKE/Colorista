@@ -3,7 +3,8 @@ import traceback
 from ..preference import get_pref
 from ...utils.logger import logger
 from ...utils.common import get_resource_dir_locale, get_resource_dir
-from ...utils.node import copy_node_properties
+from ...utils.node import copy_comp_node_tree, get_comp_node_tree, ensure_comp_node_tree
+from ...utils.node import copy_node_properties, copy_node_tree_drivers
 from ..i18n import _T
 from .properties import Props
 from .utils import set_viewport_shading
@@ -67,40 +68,10 @@ class ColoristaSavePreset(bpy.types.Operator):
         # nt.height = nf.height
 
     def copy_drivers(self, sf: bpy.types.Scene, st: bpy.types.Scene):
-        if not sf.node_tree.animation_data:
-            return
-        if not st.node_tree.animation_data:
-            st.node_tree.animation_data_create()
-        for driver in sf.node_tree.animation_data.drivers:
-            st.node_tree.animation_data.drivers.from_existing(src_driver=driver)
+        copy_node_tree_drivers(sf, st)
 
     def copy_compositor(self, sf: bpy.types.Scene, st: bpy.types.Scene):
-        st.use_nodes = True
-        st.node_tree.nodes.clear()
-        node_map = {}
-        for node in sf.node_tree.nodes:
-            new_node = st.node_tree.nodes.new(type=node.bl_idname)
-            if new_node.type == "GROUP":
-                new_node.node_tree = node.node_tree
-            copy_node_properties(node, new_node)
-            # new_node.name = node.name
-            # new_node.label = node.label
-            # new_node.location = node.location
-            # new_node.width = node.width
-            # new_node.height = node.height
-            node_map[node.name] = new_node
-        for link in sf.node_tree.links:
-            fnode = node_map[link.from_node.name]
-            tnode = node_map[link.to_node.name]
-            try:
-                fsocket = fnode.outputs[link.from_socket.identifier]
-                tsocket = tnode.inputs[link.to_socket.identifier]
-                st.node_tree.links.new(tsocket, fsocket)
-            except KeyError:
-                print("KeyError:", link.from_node.name, link.to_node.name, link.from_socket.identifier)
-        for node in st.node_tree.nodes:
-            if node.type == "R_LAYERS":
-                node.scene = None
+        copy_comp_node_tree(sf, st)
 
     def copy_scene_settings(self, sf: bpy.types.Scene, st: bpy.types.Scene):
         try:
@@ -228,7 +199,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         return new_scenes
 
     def load_compositor_sce(self, preset):
-        bpy.context.scene.use_nodes = True
+        ensure_comp_node_tree(bpy.context.scene)
         data_path = Path(preset)
         if not data_path.exists():
             return
@@ -241,6 +212,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
 
     def sync_view_layer_passs(self, vf: bpy.types.ViewLayer, vt: bpy.types.ViewLayer):
         import inspect
+
         # 查找 use_pass 开头的属性
         for name, value in inspect.getmembers(vf):
             if not name.startswith("use_pass"):
@@ -280,14 +252,14 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         except TypeError:
             pass
 
-    def load_compositor_node_tree(self, load_sces: set[bpy.types.Scene]):
-        if not load_sces:
+    def load_compositor_node_tree(self, from_sces: set[bpy.types.Scene]):
+        if not from_sces:
             return
-        all_scenes = list(load_sces)
-        load_sce = all_scenes[0]
-        for ls in load_sces:
+        all_scenes = list(from_sces)
+        from_sce = all_scenes[0]
+        for ls in from_sces:
             if ls.name == "AC-Coloring":
-                load_sce = ls
+                from_sce = ls
                 break
         # 从 load_scene 复制 compositor节点树到当前场景
         sce = bpy.context.scene
@@ -299,11 +271,26 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         #     self.sync_view_layer_passs(load_sce.view_layers[0], bpy.context.view_layer)
         node_map = {}
         r_layer: bpy.types.CompositorNodeRLayers = None
-        for nf in load_sce.node_tree.nodes:
+        from_tree = get_comp_node_tree(from_sce)
+        to_tree = get_comp_node_tree(sce)
+        if bpy.app.version >= (5, 0, 0):
+            if not from_tree:
+                return
+            bpy.context.scene.compositing_node_group = from_tree.copy()
+            to_tree = bpy.context.scene.compositing_node_group
+            for n in to_tree.nodes:
+                if n.type == "R_LAYERS":
+                    r_layer = n
+            if r_layer:
+                r_layer.scene = sce
+                r_layer.layer = bpy.context.view_layer.name
+            self.sync_settings(sce, from_sce)
+            return
+        for nf in from_tree.nodes:
             if nf.bl_idname == "NodeUndefined":
                 logger.error(f"NodeUndefined: {nf.name}")
                 continue
-            nt = sce.node_tree.nodes.new(type=nf.bl_idname)
+            nt = to_tree.nodes.new(type=nf.bl_idname)
             if nt.type == "GROUP":
                 nt.node_tree = nf.node_tree
             if nf.type == "R_LAYERS":
@@ -317,7 +304,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
                     nt.file_slots[i].use_node_format = nf.file_slots[i].use_node_format
             copy_node_properties(nf, nt)
             node_map[nf.name] = nt
-        for link in load_sce.node_tree.links:
+        for link in from_tree.links:
             if nf.bl_idname == "NodeUndefined":
                 logger.error(f"NodeUndefined: {nf.name}")
                 continue
@@ -331,18 +318,19 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             if not tsocket:
                 logger.error(f"Socket not found: {link.to_socket.identifier}")
                 continue
-            sce.node_tree.links.new(tsocket, fsocket)
+            to_tree.links.new(tsocket, fsocket)
         if r_layer:
             r_layer.scene = sce
             r_layer.layer = bpy.context.view_layer.name
-        self.sync_settings(sce, load_sce)
-        self.copy_drivers(load_sce, sce)
+        self.sync_settings(sce, from_sce)
+        self.copy_drivers(from_sce, sce)
 
     def enable_coloring_f(self, preset):
         sce = bpy.context.scene
         # 1. 如果开启缓存当前合成器 则 调用备份
         if get_pref().cache_current_compositor and not self.no_cache and sce.use_nodes:
             from .cache_history import update_history
+
             name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             path = get_resource_dir() / f"cache/{name}.blend"
             try:
@@ -357,8 +345,9 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             sce.render.compositor_device = "GPU"
         # 4. 状态开启
         set_viewport_shading("ALWAYS")
-        bpy.context.scene.use_nodes = True
-        sce.node_tree.nodes.clear()  # 加载前清理节点树
+        ensure_comp_node_tree(bpy.context.scene)
+        sce_tree = get_comp_node_tree(sce)
+        sce_tree.nodes.clear()  # 加载前清理节点树
         old_nts = set(bpy.data.node_groups)
         load_sce = self.load_compositor_sce(preset)
         new_nts = set(bpy.data.node_groups) - old_nts
@@ -372,18 +361,13 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             bpy.data.scenes.remove(ls)
         if load_sce:
             logger.info(_T("Load Compositor: {}").format(preset))
-        new_nts.add(sce.node_tree)
+        new_nts.add(sce_tree)
         for nt in new_nts:
             # 重载驱动器
             self.reload_drivers(nt.animation_data)
 
     def copy_drivers(self, sf: bpy.types.Scene, st: bpy.types.Scene):
-        if not sf.node_tree.animation_data:
-            return
-        if not st.node_tree.animation_data:
-            st.node_tree.animation_data_create()
-        for driver in sf.node_tree.animation_data.drivers:
-            st.node_tree.animation_data.drivers.from_existing(src_driver=driver)
+        copy_node_tree_drivers(sf, st)
 
     def reset_driver_with_scene_ref(self, an: bpy.types.AnimData, scenes: set[bpy.types.Scene]):
         if not an or not scenes:
@@ -418,7 +402,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             preset = Path(self.preset)
             self.preset = ""
         self.enable_coloring_f(preset)
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 clss = (
