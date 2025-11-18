@@ -4,6 +4,7 @@ from .operators import ColoristaSavePreset, ColoristaDeletePreset, ColoristaSwit
 from ..preference import get_pref
 from ...utils.icon import Icon
 from ...utils.common import grd
+from ...utils.node import get_comp_node_tree
 
 
 class ColoringPanel(bpy.types.Panel):
@@ -28,7 +29,7 @@ class ColoringPanel(bpy.types.Panel):
         if not context.scene.use_nodes:
             return
         nodes: list[bpy.types.Node] = []
-        for node in context.scene.node_tree.nodes:
+        for node in get_comp_node_tree(context.scene).nodes:
             if node.type in {"VIEWER", "R_LAYERS"}:
                 continue
             if not node.label:
@@ -64,7 +65,7 @@ class ColoringPanel(bpy.types.Panel):
                     row.alignment = "CENTER"
                     row.label(text=inp.name)
                     continue
-                bbox.template_node_view(context.scene.node_tree, node, inp)
+                bbox.template_node_view(get_comp_node_tree(context.scene), node, inp)
 
     def draw_header(self, context: Context):
         self.layout.template_icon(icon_value=Icon.reg_icon(grd() / "icons/color.png"))
