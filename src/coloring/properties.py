@@ -13,6 +13,7 @@ PANEL_TCTX = "ColoristaPanelTCTX"
 
 class Props(bpy.types.PropertyGroup):
     loaded_node_groups = set()
+    PRESET_NONE_ID = "__NONE__"
 
     def enable_coloring_f(self):
         bpy.ops.colorista.compositor_nodetree_import(use_default=True)
@@ -123,7 +124,7 @@ class Props(bpy.types.PropertyGroup):
     def get_presets(self, context):
         asset = self.asset
         if not asset:
-            return []
+            return [(self.PRESET_NONE_ID, "None", "No preset available", 0)]
         rdir = Path(asset).with_suffix("")
         # TODO: exist检查速度非常慢, 慢到足已影响UI的流畅
         # if not rdir.exists():
@@ -135,19 +136,27 @@ class Props(bpy.types.PropertyGroup):
         self._ref_items[rdir] = items
         for file in sorted(rdir.glob("*.blend"), key=lambda x: x.name):
             items.append((file.as_posix(), file.stem, file.stem, len(items)))
+        if not items:
+            items.append((self.PRESET_NONE_ID, "None", "No preset available", 0))
         return self._ref_items.get(rdir, [])
 
     def set_preset(self, value):
         self["preset"] = value
-        bpy.ops.colorista.compositor_nodetree_import(preset=self.preset)
+        if self.preset != self.PRESET_NONE_ID:
+            bpy.ops.colorista.compositor_nodetree_import(preset=self.preset)
 
     def get_preset(self):
-        if "preset" not in self:
-            try:
-                self["preset"] = 0
-            except AttributeError:
-                return 0
-        return self["preset"]
+        try:
+            items = self.get_presets(bpy.context)
+        except AttributeError:
+            return 0
+
+        valid_values = {item[3] for item in items}
+        current = self.get("preset", 0)
+        if current not in valid_values:
+            current = items[0][3] if items else 0
+            self["preset"] = current
+        return current
 
     preset: bpy.props.EnumProperty(name="Preset",
                                    items=get_presets,
