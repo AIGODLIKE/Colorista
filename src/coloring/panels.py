@@ -1,5 +1,4 @@
 import bpy
-from bpy.types import Context
 from .operators import ColoristaSavePreset, ColoristaDeletePreset, ColoristaSwitchDevice, ColoristaSwitchPrecision
 from ..preference import get_pref
 from ...utils.icon import Icon
@@ -67,10 +66,10 @@ class ColoringPanel(bpy.types.Panel):
                     continue
                 bbox.template_node_view(get_comp_node_tree(context.scene), node, inp)
 
-    def draw_header(self, context: Context):
+    def draw_header(self, context: bpy.types.Context):
         self.layout.template_icon(icon_value=Icon.reg_icon(grd() / "icons/color.png"))
 
-    def draw_header_preset(self, context: Context):
+    def draw_header_preset(self, context: bpy.types.Context):
         layout = self.layout.row(align=True)
         row = layout.row(align=True)
         prop = bpy.context.scene.colorista_prop
@@ -146,7 +145,7 @@ class ColoristaHistoryPanel(bpy.types.Panel):
     bl_region_type = "WINDOW"
     bl_options = {"INSTANCED"}
 
-    def draw(self, context: Context):
+    def draw(self, context: bpy.types.Context):
         sce = bpy.context.scene
         layout = self.layout
         layout.template_list("COLORISTA_HISTORY_UL_UIList", "", sce, "colorista_items", sce, "colorista_items_index")
