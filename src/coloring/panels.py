@@ -54,7 +54,7 @@ class ColoringPanel(bpy.types.Panel):
                 box.separator(type="LINE")
             else:
                 box.separator()
-            node.draw_buttons(context, box)
+            node.draw_buttons(context, box) # Tips: 用户手动切换节点后会出现bug
             bbox = box
             for inp in sockets:
                 if inp.name.startswith("——"):
