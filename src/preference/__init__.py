@@ -1,5 +1,6 @@
 # type: ignore
 from __future__ import annotations
+
 import bpy
 
 PROP_TCTX = "ColoristaTCTX"
@@ -47,7 +48,10 @@ class Preferences(bpy.types.AddonPreferences):
                                                      update=update_cache_current_cache_count,
                                                      translation_context=PROP_TCTX)
 
-    force_use_cpu_render_image: bpy.props.BoolProperty(name="Force Use CPU Render Image", default=False, translation_context=PROP_TCTX)
+    force_use_cpu_render_image: bpy.props.BoolProperty(name="Force Use CPU Render Image", default=False,
+                                                       translation_context=PROP_TCTX)
+
+    debug: bpy.props.BoolProperty(name="Debug", default=False)
 
     def draw(self, context):
         layout = self.layout
@@ -57,6 +61,10 @@ class Preferences(bpy.types.AddonPreferences):
         row = layout.row()
         row.prop(self, "cache_current_compositor", toggle=True)
         row.prop(self, "cache_current_cache_count")
+
+        layout.separator()
+
+        layout.prop(self, "debug")
 
 
 def register():

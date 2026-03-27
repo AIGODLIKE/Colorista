@@ -1,8 +1,11 @@
-import bpy
 import re
 import traceback
-from ...utils.node import get_comp_node_tree
+
+import bpy
+
 from ..preference import get_pref
+from ...utils.node import get_comp_node_tree
+
 # 主节点组名称
 main_node_group_name = "Basic adjustment nodes for colorists"
 
@@ -53,6 +56,7 @@ def update_custom_vt(_):
 
 @bpy.app.handlers.persistent
 def update_node_group(scene):
+    is_debug = get_pref().debug
     # 获取当前场景的节点树，并找到主节点组
     main_node_tree = get_comp_node_tree(scene)
     if not main_node_tree:
@@ -82,14 +86,17 @@ def update_node_group(scene):
             # 检查参数是否为 0
             if input_socket.default_value == 0:
                 node.mute = True  # 将子节点组屏蔽
-                print(f"子节点 {node.name} 已屏蔽，因为参数为 0")
+                if is_debug:
+                    print(f"Child node {node.name} is blocked because the parameter is 0")
             else:
                 # 设置标签为参数名称
-                node.label = f"已绑定（{input_name}）"
+                node.label = f"Bound({input_name})"
                 node.mute = False  # 确保子节点组未屏蔽
-                print(f"子节点的新标签为: {node.label}")
+                if is_debug:
+                    print(f"The new label for the child node is: {node.label}")
         else:
-            print(f"输入编号 {input_index} 超出范围")
+            if is_debug:
+                print(f"Input number {input_index} is out of range")
 
 
 class RenderHandler:
