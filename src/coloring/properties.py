@@ -1,10 +1,11 @@
+from pathlib import Path
+
 import bpy
-from ...utils.logger import logger
-from ...utils.watcher import FSWatcher
+
 from ...utils.common import get_resource_dir_locale, get_resource_dir
 from ...utils.icon import Icon
-from ...utils.node import copy_node_properties
-from pathlib import Path
+from ...utils.logger import logger
+from ...utils.watcher import FSWatcher
 
 PROP_TCTX = "ColoristaTCTX"
 PANEL_TCTX = "ColoristaPanelTCTX"
@@ -111,7 +112,7 @@ class Props(bpy.types.PropertyGroup):
             return
         self.next_asset = False
         items = self.asset_items(context)
-        self.asset = items[(self["asset"] + 1)  % len(items)][0]
+        self.asset = items[(self["asset"] + 1) % len(items)][0]
 
     next_asset: bpy.props.BoolProperty(default=False,
                                        name="Next Asset",

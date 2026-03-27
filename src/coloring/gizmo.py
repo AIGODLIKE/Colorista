@@ -1,5 +1,5 @@
 import bpy
-from bpy.types import Context
+
 from .utils import toggle_viewport_shading
 from ..preference import get_pref
 
@@ -54,6 +54,9 @@ class ColoristaGizmos(bpy.types.GizmoGroup):
 
     @classmethod
     def poll(cls, context: bpy.types.Context):
+        if context.space_data and context.space_data.region_quadviews:
+            # 四视图模式下只在右上角视图显示
+            return context.region_data == context.space_data.region_quadviews[-1]
         return True
 
     def get_n_panel_width(self, context: bpy.types.Context):
@@ -117,7 +120,7 @@ class ColoristaGizmos(bpy.types.GizmoGroup):
         gz.show_drag = False
         self.gz = gz
 
-    def refresh(self, context: Context):
+    def refresh(self, context: bpy.types.Context):
         self.gz.alpha = 0.5
         self.gz.color = 0.08, 0.08, 0.08
         self.gz.color_highlight = 0.317, 0.443, 0.682  # 0.3176470696926117, 0.4431372880935669, 0.6823529601097107
