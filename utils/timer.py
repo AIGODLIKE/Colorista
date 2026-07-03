@@ -1,16 +1,16 @@
 import bpy
 import traceback
-from queue import Queue
+from collections import deque
 from typing import Any
 from .logger import logger
 
 
 class Timer:
-    TimerQueue = Queue()
+    TimerQueue = deque()
 
     @classmethod
     def put(cls, delegate: Any):
-        cls.TimerQueue.put(delegate)
+        cls.TimerQueue.append(delegate)
 
     @classmethod
     def executor(cls, t):
@@ -24,9 +24,9 @@ class Timer:
         return cls.run_ex(cls.TimerQueue)
 
     @classmethod
-    def run_ex(cls, queue: Queue):
-        while not queue.empty():
-            t = queue.get()
+    def run_ex(cls, queue: deque):
+        while queue:
+            t = queue.popleft()
             try:
                 cls.executor(t)
             except Exception as e:
@@ -38,28 +38,7 @@ class Timer:
 
     @classmethod
     def clear(cls):
-        while not cls.TimerQueue.empty():
-            cls.TimerQueue.get()
-
-    @classmethod
-    def wait_run(cls, func):
-        def wrap(*args, **kwargs):
-            q = Queue()
-
-            def wrap_job(q):
-                try:
-                    res = func(*args, **kwargs)
-                    q.put(res)
-                except Exception as e:
-                    q.put(e)
-
-            cls.put((wrap_job, q))
-            res = q.get()
-            if isinstance(res, Exception):
-                raise res
-            return res
-
-        return wrap
+        cls.TimerQueue.clear()
 
     @classmethod
     def reg(cls):
