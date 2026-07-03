@@ -41,13 +41,6 @@ class DepsgraphPostHandler:
 
 
 @bpy.app.handlers.persistent
-def update_others(_):
-    from .timer import update_color_manager
-
-    update_color_manager()
-
-
-@bpy.app.handlers.persistent
 def update_custom_vt(_):
     from .timer import update_custom_vt
 
@@ -56,6 +49,8 @@ def update_custom_vt(_):
 
 @bpy.app.handlers.persistent
 def update_node_group(scene):
+    if not scene.colorista_prop.enable_coloring:
+        return
     is_debug = get_pref().debug
     # 获取当前场景的节点树，并找到主节点组
     main_node_tree = get_comp_node_tree(scene)
@@ -171,7 +166,6 @@ def restore_render_device(self: RenderHandler, scene: bpy.types.Scene):
 def register():
     DepsgraphPostHandler.add(update_node_group)
     DepsgraphPostHandler.add(update_custom_vt)
-    DepsgraphPostHandler.add(update_others)
     DepsgraphPostHandler.register()
     RenderHandler.add(switch_to_cpu_device, "pre")
     RenderHandler.add(restore_render_device, "complete")

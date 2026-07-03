@@ -205,6 +205,8 @@ def reload_handler(sce):
 @bpy.app.handlers.persistent
 def coloring_checker(_):
     try:
+        if not bpy.context.scene.colorista_prop.enable_coloring:
+            return
         for area in bpy.context.screen.areas:
             if area.type != "VIEW_3D":
                 continue

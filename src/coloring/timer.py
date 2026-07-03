@@ -129,7 +129,6 @@ def update_color_manager():
 
 def register():
     UpdateTimer1s.add(update_device)
-    UpdateTimer1s.add(update_color_manager)
     UpdateTimer1s.add(update_custom_vt)
     UpdateTimer1s.register()
 
