@@ -13,9 +13,10 @@ from datetime import datetime
 
 
 class ColoristaSavePreset(bpy.types.Operator):
-    bl_idname = "colorista.save_preset"
+    bl_idname = "wm.colorista_save_preset"
     bl_description = "Save preset"
     bl_label = "Save preset"
+    bl_options = {'REGISTER', 'UNDO'}
 
     preset: bpy.props.StringProperty(default="")
     popup: bpy.props.BoolProperty(default=True)
@@ -97,9 +98,10 @@ class ColoristaSavePreset(bpy.types.Operator):
 
 
 class ColoristaDeletePreset(bpy.types.Operator):
-    bl_idname = "colorista.delete_preset"
+    bl_idname = "wm.colorista_delete_preset"
     bl_description = "Delete preset"
     bl_label = "Delete preset"
+    bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
@@ -119,17 +121,18 @@ class ColoristaDeletePreset(bpy.types.Operator):
     def execute(self, context: bpy.types.Context):
         path = Path(context.scene.colorista_prop.preset)
         if not path or not path.exists():
-            logger.error("Cannot find preset!")
-            return {"FINISHED"}
+            self.report({'ERROR'}, "Cannot find preset")
+            return {"CANCELLED"}
 
         path.unlink()
         return {"FINISHED"}
 
 
 class ColoristaSwitchDevice(bpy.types.Operator):
-    bl_idname = "colorista.switch_device"
+    bl_idname = "wm.colorista_switch_device"
     bl_description = "Switch device"
     bl_label = "Switch device"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         render = context.scene.render
@@ -141,9 +144,10 @@ class ColoristaSwitchDevice(bpy.types.Operator):
 
 
 class ColoristaSwitchPrecision(bpy.types.Operator):
-    bl_idname = "colorista.switch_precision"
+    bl_idname = "wm.colorista_switch_precision"
     bl_description = "Switch precision"
     bl_label = "Switch precision"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         render = context.scene.render
@@ -155,9 +159,10 @@ class ColoristaSwitchPrecision(bpy.types.Operator):
 
 
 class CompositorNodeTreeImport(bpy.types.Operator):
-    bl_idname = "colorista.compositor_nodetree_import"
+    bl_idname = "wm.colorista_compositor_import"
     bl_description = "Import a node tree"
-    bl_label = "Import a node tre"
+    bl_label = "Import a node tree"
+    bl_options = {'REGISTER', 'UNDO'}
 
     use_default: bpy.props.BoolProperty(default=False)
     preset: bpy.props.StringProperty(default="")
@@ -216,7 +221,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         # 查找 use_pass 开头的属性
         for name, value in inspect.getmembers(vf):
             if not name.startswith("use_pass"):
-                pass
+                continue
             try:
                 setattr(vt, name, value)
             except AttributeError:
@@ -224,14 +229,14 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         # 查找 cycles 属性
         for name, value in inspect.getmembers(getattr(vf, "cycles", None)):
             if not name.startswith("use_pass"):
-                pass
+                continue
             try:
                 setattr(vt.cycles, name, value)
             except AttributeError:
                 pass
         for name, value in inspect.getmembers(getattr(vf, "eevee", None)):
             if not name.startswith("use_pass"):
-                pass
+                continue
             try:
                 setattr(vt.eevee, name, value)
             except AttributeError:
@@ -305,8 +310,10 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             copy_node_properties(nf, nt)
             node_map[nf.name] = nt
         for link in from_tree.links:
-            if nf.bl_idname == "NodeUndefined":
-                logger.error(f"NodeUndefined: {nf.name}")
+            if link.from_node.bl_idname == "NodeUndefined" or link.to_node.bl_idname == "NodeUndefined":
+                logger.error(f"NodeUndefined link: {link.from_node.name} -> {link.to_node.name}")
+                continue
+            if link.from_node.name not in node_map or link.to_node.name not in node_map:
                 continue
             fnode = node_map[link.from_node.name]
             tnode = node_map[link.to_node.name]
@@ -334,7 +341,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             path = get_resource_dir() / f"cache/{name}.blend"
             try:
-                bpy.ops.colorista.save_preset(preset=path.as_posix(), popup=False)
+                bpy.ops.wm.colorista_save_preset(preset=path.as_posix(), popup=False)
             except Exception as e:
                 logger.error(e)
             update_history()
@@ -352,14 +359,12 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         load_sce = self.load_compositor_sce(preset)
         new_nts = set(bpy.data.node_groups) - old_nts
         self.load_compositor_node_tree(load_sce)
-        # 场景重置所有使用 load_sce 场景的nodetree驱动器
-        for nt in new_nts:
-            # 重载驱动器
-            self.reset_driver_with_scene_ref(nt.animation_data, load_sce)
-        # 暂时不做缓存, 直接删除
-        for ls in load_sce:
-            bpy.data.scenes.remove(ls)
         if load_sce:
+            # 场景重置所有使用 load_sce 场景的nodetree驱动器
+            for nt in new_nts:
+                self.reset_driver_with_scene_ref(nt.animation_data, load_sce)
+            for ls in load_sce:
+                bpy.data.scenes.remove(ls)
             logger.info(_T("Load Compositor: {}").format(preset))
         new_nts.add(sce_tree)
         for nt in new_nts:
