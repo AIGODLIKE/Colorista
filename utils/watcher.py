@@ -31,6 +31,7 @@ class FSWatcher:
             return
         cls._watcher_path[path] = False
         cls._watcher_callback[path] = callback
+        cls._run()
 
     @classmethod
     def unregister(cls, path):
@@ -158,7 +159,7 @@ class FSWatcher:
 
 
 def register():
-    FSWatcher.init()
+    pass
 
 
 def unregister():

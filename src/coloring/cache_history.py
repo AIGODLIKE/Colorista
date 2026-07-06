@@ -25,9 +25,10 @@ class COLORISTA_HISTORY_UL_UIList(bpy.types.UIList):
 
 
 class ColoristaDeleteHistory(bpy.types.Operator):
-    bl_idname = "colorista.delete_history"
+    bl_idname = "wm.colorista_delete_history"
     bl_description = "Delete history"
     bl_label = "Delete history"
+    bl_options = {'REGISTER', 'UNDO'}
 
     file: bpy.props.StringProperty(default="")
 
@@ -39,9 +40,9 @@ class ColoristaDeleteHistory(bpy.types.Operator):
             return {"FINISHED"}
         if file.is_dir():
             return {"FINISHED"}
-        if not file.with_suffix(".blend"):
+        if file.suffix.lower() != ".blend":
             return {"FINISHED"}
-        Path(self.file).unlink()
+        file.unlink()
         update_history()
         return {"FINISHED"}
 

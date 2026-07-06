@@ -81,7 +81,19 @@ class Icon(metaclass=MetaIn):
         Icon.IMG_STATUS.clear()
         Icon.PIX_STATUS.clear()
         Icon.PATH2BPY.clear()
-        Icon.reg_icon(Icon.NONE_IMAGE)
+        if Icon.NONE_IMAGE:
+            Icon.reg_icon(Icon.NONE_IMAGE)
+
+    @staticmethod
+    def cleanup():
+        if Icon.PREV_DICT is not None:
+            PrevMgr.remove(Icon.PREV_DICT)
+        Icon.PREV_DICT = PrevMgr.new()
+        Icon.IMG_STATUS.clear()
+        Icon.PIX_STATUS.clear()
+        Icon.PATH2BPY.clear()
+        Icon.NONE_IMAGE = ""
+        Icon.INSTANCE = None
 
     @staticmethod
     def set_hq_preview():

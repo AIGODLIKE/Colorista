@@ -7,7 +7,7 @@ PROP_TCTX = "ColoristaTCTX"
 
 
 def get_package() -> str:
-    return ".".join(__package__.split(".")[:-2])
+    return __package__.rsplit(".", 2)[0]
 
 
 def get_pref() -> Preferences:
@@ -51,6 +51,14 @@ class Preferences(bpy.types.AddonPreferences):
     force_use_cpu_render_image: bpy.props.BoolProperty(name="Force Use CPU Render Image", default=False,
                                                        translation_context=PROP_TCTX)
 
+    def update_enable_logging(self, context):
+        from ...utils.logger import configure_logger
+        configure_logger(self.enable_logging)
+
+    enable_logging: bpy.props.BoolProperty(name="Enable Logging", default=False,
+                                           update=update_enable_logging,
+                                           translation_context=PROP_TCTX)
+
     debug: bpy.props.BoolProperty(name="Debug", default=False)
 
     def draw(self, context):
@@ -64,11 +72,17 @@ class Preferences(bpy.types.AddonPreferences):
 
         layout.separator()
 
+        layout.prop(self, "enable_logging")
         layout.prop(self, "debug")
 
 
 def register():
     bpy.utils.register_class(Preferences)
+    try:
+        from ...utils.logger import configure_logger
+        configure_logger(bpy.context.preferences.addons[get_package()].preferences.enable_logging)
+    except Exception:
+        pass
 
 
 def unregister():

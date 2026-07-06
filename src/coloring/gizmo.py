@@ -32,13 +32,19 @@ def calc_icon_offset_from_axis():
 
 
 class ColoristaGzOps(bpy.types.Operator):
-    bl_idname = "colorista.gz_switch_compositor"
+    bl_idname = "wm.colorista_gz_switch_compositor"
     bl_label = "Switch View Compositor"
     bl_description = "Switch View Compositor"
+    bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
-        return context.area.ui_type == "VIEW_3D"
+        if context.area.ui_type != "VIEW_3D":
+            return False
+        try:
+            return context.scene.colorista_prop.enable_coloring
+        except AttributeError:
+            return False
 
     def execute(self, context):
         toggle_viewport_shading()
@@ -54,6 +60,11 @@ class ColoristaGizmos(bpy.types.GizmoGroup):
 
     @classmethod
     def poll(cls, context: bpy.types.Context):
+        try:
+            if not context.scene.colorista_prop.enable_coloring:
+                return False
+        except AttributeError:
+            return False
         if context.space_data and context.space_data.region_quadviews:
             # 四视图模式下只在右上角视图显示
             return context.region_data == context.space_data.region_quadviews[-1]

@@ -11,17 +11,35 @@ PROP_TCTX = "ColoristaTCTX"
 PANEL_TCTX = "ColoristaPanelTCTX"
 
 
+def _enum_index(items, value: str) -> int:
+    for i, item in enumerate(items):
+        if item[0] == value:
+            return i
+    return 0
+
+
 class Props(bpy.types.PropertyGroup):
     loaded_node_groups = set()
     PRESET_NONE_ID = "__NONE__"
 
     def enable_coloring_f(self):
-        bpy.ops.colorista.compositor_nodetree_import(use_default=True)
+        bpy.ops.wm.colorista_compositor_import(use_default=True)
+
+    def disable_coloring_f(self, context: bpy.types.Context):
+        from .runtime import deactivate
+
+        deactivate()
 
     def update_enable_coloring(self, context: bpy.types.Context):
-        logger.info("调色开启" if self.enable_coloring else "调色关闭")
         if self.enable_coloring:
+            logger.info("Coloring enabled")
             self.enable_coloring_f()
+            from .runtime import activate
+
+            activate()
+        else:
+            logger.info("Coloring disabled")
+            self.disable_coloring_f(context)
 
     enable_coloring: bpy.props.BoolProperty(default=False,
                                             name="Enable Coloring",
@@ -33,9 +51,6 @@ class Props(bpy.types.PropertyGroup):
 
     def pre_dir_items(self, context):
         rdir = get_resource_dir_locale()
-        # TODO: exist检查速度非常慢, 慢到足已影响UI的流畅
-        # if not rdir.exists():
-        #     return []
         FSWatcher.register(rdir)
         if not FSWatcher.consume_change(rdir) and rdir in self._ref_items:
             return self._ref_items.get(rdir, [])
@@ -65,9 +80,6 @@ class Props(bpy.types.PropertyGroup):
         if not self.pre_dir:
             return []
         rdir = Path(self.pre_dir)
-        # TODO: exist检查速度非常慢, 慢到足已影响UI的流畅
-        # if not rdir.exists():
-        #     return []
         FSWatcher.register(rdir)
         if not FSWatcher.consume_change(rdir) and rdir in self._ref_items:
             return self._ref_items.get(rdir, [])
@@ -82,12 +94,20 @@ class Props(bpy.types.PropertyGroup):
 
     def set_asset(self, value):
         self["asset"] = value
-        bpy.ops.colorista.compositor_nodetree_import()
+        bpy.ops.wm.colorista_compositor_import()
 
     def get_asset(self):
-        if "asset" not in self:
-            self["asset"] = 0
-        return self["asset"]
+        try:
+            items = self.asset_items(bpy.context)
+        except AttributeError:
+            return ""
+
+        valid = {item[0] for item in items}
+        current = self.get("asset", "")
+        if current not in valid:
+            current = items[0][0] if items else ""
+            self["asset"] = current
+        return current
 
     asset: bpy.props.EnumProperty(name="Asset",
                                   items=asset_items,
@@ -100,7 +120,10 @@ class Props(bpy.types.PropertyGroup):
             return
         self.last_asset = False
         items = self.asset_items(context)
-        self.asset = items[(self["asset"] - 1) % len(items)][0]
+        if not items:
+            return
+        idx = _enum_index(items, self.asset)
+        self.asset = items[(idx - 1) % len(items)][0]
 
     last_asset: bpy.props.BoolProperty(default=False,
                                        name="Last Asset",
@@ -113,7 +136,10 @@ class Props(bpy.types.PropertyGroup):
             return
         self.next_asset = False
         items = self.asset_items(context)
-        self.asset = items[(self["asset"] + 1) % len(items)][0]
+        if not items:
+            return
+        idx = _enum_index(items, self.asset)
+        self.asset = items[(idx + 1) % len(items)][0]
 
     next_asset: bpy.props.BoolProperty(default=False,
                                        name="Next Asset",
@@ -126,9 +152,6 @@ class Props(bpy.types.PropertyGroup):
         if not asset:
             return [(self.PRESET_NONE_ID, "None", "No preset available", 0)]
         rdir = Path(asset).with_suffix("")
-        # TODO: exist检查速度非常慢, 慢到足已影响UI的流畅
-        # if not rdir.exists():
-        #     return []
         FSWatcher.register(rdir)
         if not FSWatcher.consume_change(rdir) and rdir in self._ref_items:
             return self._ref_items.get(rdir, [])
@@ -143,18 +166,18 @@ class Props(bpy.types.PropertyGroup):
     def set_preset(self, value):
         self["preset"] = value
         if self.preset != self.PRESET_NONE_ID:
-            bpy.ops.colorista.compositor_nodetree_import(preset=self.preset)
+            bpy.ops.wm.colorista_compositor_import(preset=self.preset)
 
     def get_preset(self):
         try:
             items = self.get_presets(bpy.context)
         except AttributeError:
-            return 0
+            return self.PRESET_NONE_ID
 
-        valid_values = {item[3] for item in items}
-        current = self.get("preset", 0)
-        if current not in valid_values:
-            current = items[0][3] if items else 0
+        valid = {item[0] for item in items}
+        current = self.get("preset", self.PRESET_NONE_ID)
+        if current not in valid:
+            current = items[0][0] if items else self.PRESET_NONE_ID
             self["preset"] = current
         return current
 
@@ -170,7 +193,10 @@ class Props(bpy.types.PropertyGroup):
             return
         self.last_preset = False
         items = self.get_presets(context)
-        self.preset = items[(self["preset"] - 1) % len(items)][0]
+        if not items:
+            return
+        idx = _enum_index(items, self.preset)
+        self.preset = items[(idx - 1) % len(items)][0]
 
     last_preset: bpy.props.BoolProperty(default=False,
                                         name="Last Preset",
@@ -183,7 +209,10 @@ class Props(bpy.types.PropertyGroup):
             return
         self.next_preset = False
         items = self.get_presets(context)
-        self.preset = items[(self["preset"] + 1) % len(items)][0]
+        if not items:
+            return
+        idx = _enum_index(items, self.preset)
+        self.preset = items[(idx + 1) % len(items)][0]
 
     next_preset: bpy.props.BoolProperty(default=False,
                                         name="Next Preset",
@@ -200,18 +229,12 @@ class Props(bpy.types.PropertyGroup):
 @bpy.app.handlers.persistent
 def reload_handler(sce):
     Props.loaded_node_groups.clear()
-
-
-@bpy.app.handlers.persistent
-def coloring_checker(_):
     try:
-        if not bpy.context.scene.colorista_prop.enable_coloring:
-            return
-        for area in bpy.context.screen.areas:
-            if area.type != "VIEW_3D":
-                continue
-            area.tag_redraw()
-    except Exception:
+        if sce.colorista_prop.enable_coloring:
+            from .runtime import activate
+
+            activate()
+    except AttributeError:
         pass
 
 
@@ -227,12 +250,13 @@ def register():
     bpy.types.Scene.colorista_prop = bpy.props.PointerProperty(type=Props)
     bpy.types.Node.ac_expand = bpy.props.BoolProperty(name="Expand", default=True)
     bpy.app.handlers.load_post.append(reload_handler)
-    bpy.app.handlers.depsgraph_update_post.append(coloring_checker)
 
 
 def unregister():
+    from .runtime import deactivate
+
+    deactivate()
     unreg()
     bpy.app.handlers.load_post.remove(reload_handler)
-    bpy.app.handlers.depsgraph_update_post.remove(coloring_checker)
     del bpy.types.Node.ac_expand
     del bpy.types.Scene.colorista_prop

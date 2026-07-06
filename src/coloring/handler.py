@@ -164,14 +164,8 @@ def restore_render_device(self: RenderHandler, scene: bpy.types.Scene):
 
 
 def register():
-    DepsgraphPostHandler.add(update_node_group)
-    DepsgraphPostHandler.add(update_custom_vt)
-    DepsgraphPostHandler.register()
-    RenderHandler.add(switch_to_cpu_device, "pre")
-    RenderHandler.add(restore_render_device, "complete")
-    RenderHandler.register()
+    pass
 
 
 def unregister():
-    DepsgraphPostHandler.unregister()
-    RenderHandler.unregister()
+    pass

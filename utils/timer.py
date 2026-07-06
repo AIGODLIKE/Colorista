@@ -7,10 +7,14 @@ from .logger import logger
 
 class Timer:
     TimerQueue = deque()
+    _registered = False
 
     @classmethod
     def put(cls, delegate: Any):
         cls.TimerQueue.append(delegate)
+        if not cls._registered:
+            cls.reg()
+            cls._registered = True
 
     @classmethod
     def executor(cls, t):
@@ -47,6 +51,7 @@ class Timer:
     @classmethod
     def unreg(cls):
         cls.clear()
+        cls._registered = False
         try:
             bpy.app.timers.unregister(cls.run)
         except Exception:
@@ -54,7 +59,7 @@ class Timer:
 
 
 def register():
-    Timer.reg()
+    pass
 
 
 def unregister():
