@@ -4,7 +4,7 @@ from pathlib import Path
 
 from ..i18n import _T
 from ..preference import get_pref
-from .properties import Props
+from .state import loaded_node_groups
 from .utils import set_viewport_shading
 from ...utils.common import (
     get_default_preset_path,
@@ -34,7 +34,10 @@ class ColoristaSavePreset(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
-        return scene_uses_compositor(context.scene)
+        if not scene_uses_compositor(context.scene):
+            cls.poll_message_set("Compositor nodes are not enabled for this scene")
+            return False
+        return True
 
     def draw(self, context):
         layout = self.layout
@@ -52,32 +55,16 @@ class ColoristaSavePreset(bpy.types.Operator):
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
         if not context.scene.colorista_prop.get_asset_path(context):
+            self.report({'ERROR'}, "No asset selected")
             return {"CANCELLED"}
         if not context.scene.colorista_prop.preset_save_name:
+            self.report({'ERROR'}, "Enter a preset name")
             return {"CANCELLED"}
         wm = context.window_manager
         path = self.get_preset_path()
         if path and path.exists() and self.popup:
             return wm.invoke_props_dialog(self, width=200)
         return self.execute(context)
-
-    def copy_node(self, nf: bpy.types.Node, nt: bpy.types.Node):
-        if nt.type == "GROUP":
-            nt.node_tree = nf.node_tree
-        for prop_name in nf.bl_rna.properties.keys():
-            if nt.type == "GROUP" and prop_name == "node_tree":
-                continue
-            try:
-                setattr(nt, prop_name, getattr(nf, prop_name))
-            except AttributeError:
-                pass
-        for inp in nf.inputs:
-            nt.inputs[inp.identifier].default_value = inp.default_value
-        # nt.name = nf.name
-        # nt.label = nf.label
-        # nt.location = nf.location
-        # nt.width = nf.width
-        # nt.height = nf.height
 
     def copy_drivers(self, sf: bpy.types.Scene, st: bpy.types.Scene):
         copy_node_tree_drivers(sf, st)
@@ -117,7 +104,13 @@ class ColoristaDeletePreset(bpy.types.Operator):
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
         prop = context.scene.colorista_prop
-        return bool(prop.get_asset_path(context)) and prop.get_preset_path(context) != prop.PRESET_NONE_ID
+        if not prop.get_asset_path(context):
+            cls.poll_message_set("Select an asset first")
+            return False
+        if prop.get_preset_path(context) == prop.PRESET_NONE_ID:
+            cls.poll_message_set("Select a preset to delete")
+            return False
+        return True
 
     def draw(self, context: bpy.types.Context):
         layout = self.layout
@@ -187,10 +180,10 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             return False
 
     def _load_compositor_scene(self, path):
-        for group in list(Props.loaded_node_groups):
+        for group in list(loaded_node_groups):
             if self.rsc_used(group):
                 continue
-            Props.loaded_node_groups.discard(group)
+            loaded_node_groups.discard(group)
             try:
                 bpy.data.node_groups.remove(group)
             except ReferenceError:
@@ -210,7 +203,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         new_scenes = set(bpy.data.scenes) - old_scenes
         new_groups = set(bpy.data.node_groups) - old_groups
         for ngroup in new_groups:
-            Props.loaded_node_groups.add(ngroup)
+            loaded_node_groups.add(ngroup)
         if not new_scenes:
             return
         return new_scenes
@@ -226,39 +219,6 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             sce = None
             logger.exception("Failed to load compositor scene from %s", data_path)
         return sce
-
-    def sync_view_layer_passs(self, vf: bpy.types.ViewLayer, vt: bpy.types.ViewLayer):
-        import inspect
-
-        # 查找 use_pass 开头的属性
-        for name, value in inspect.getmembers(vf):
-            if not name.startswith("use_pass"):
-                continue
-            try:
-                setattr(vt, name, value)
-            except AttributeError:
-                pass
-        # 查找 cycles 属性
-        for name, value in inspect.getmembers(getattr(vf, "cycles", None)):
-            if not name.startswith("use_pass"):
-                continue
-            try:
-                setattr(vt.cycles, name, value)
-            except AttributeError:
-                pass
-        for name, value in inspect.getmembers(getattr(vf, "eevee", None)):
-            if not name.startswith("use_pass"):
-                continue
-            try:
-                setattr(vt.eevee, name, value)
-            except AttributeError:
-                pass
-        cy_addition_pass = ["denoising_store_passes", "pass_debug_sample_count"]
-        for ap in cy_addition_pass:
-            try:
-                setattr(vt.cycles, ap, getattr(vf.cycles, ap))
-            except AttributeError:
-                pass
 
     def sync_settings(self, current_sce: bpy.types.Scene, loaded_sce: bpy.types.Scene):
         pref = get_pref()
@@ -376,19 +336,28 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             sce_tree.nodes.clear()
         old_nts = set(bpy.data.node_groups)
         load_sce = self.load_compositor_sce(preset)
+        if not load_sce:
+            logger.error("Failed to load compositor from %s", preset_path)
+            return
         new_nts = set(bpy.data.node_groups) - old_nts
         self.load_compositor_node_tree(load_sce)
-        if load_sce:
-            # 场景重置所有使用 load_sce 场景的nodetree驱动器
-            for nt in new_nts:
-                self.reset_driver_with_scene_ref(nt.animation_data, load_sce)
-            for ls in load_sce:
-                bpy.data.scenes.remove(ls)
-            logger.info(_T("Load Compositor: {}").format(preset))
-        new_nts.add(sce_tree)
         for nt in new_nts:
-            # 重载驱动器
-            self.reload_drivers(nt.animation_data)
+            self.reset_driver_with_scene_ref(nt.animation_data, load_sce)
+        for ls in load_sce:
+            bpy.data.scenes.remove(ls)
+        logger.info(_T("Load Compositor: {}").format(preset))
+        if sce_tree is not None:
+            new_nts.add(sce_tree)
+        for nt in new_nts:
+            if nt is not None:
+                self.reload_drivers(nt.animation_data)
+        from .handler import update_node_group
+        from .timer import update_custom_vt
+        from .utils import clear_node_expand_cache
+
+        clear_node_expand_cache()
+        update_node_group(sce)
+        update_custom_vt()
 
     def copy_drivers(self, sf: bpy.types.Scene, st: bpy.types.Scene):
         copy_node_tree_drivers(sf, st)
@@ -430,12 +399,42 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class ColoristaToggleNodeExpand(bpy.types.Operator):
+    bl_idname = "wm.colorista_toggle_node_expand"
+    bl_label = "Toggle Node Panel"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    node_name: bpy.props.StringProperty(default="")
+    tree_name: bpy.props.StringProperty(default="")
+
+    def execute(self, context):
+        tree = bpy.data.node_groups.get(self.tree_name)
+        if tree is None:
+            for ng in bpy.data.node_groups:
+                if getattr(ng, "name_full", ng.name) == self.tree_name:
+                    tree = ng
+                    break
+        if tree is None:
+            return {"CANCELLED"}
+        node = tree.nodes.get(self.node_name)
+        if node is None:
+            return {"CANCELLED"}
+        from .utils import toggle_node_expanded
+
+        toggle_node_expanded(node)
+        for area in context.screen.areas:
+            if area.type == "VIEW_3D":
+                area.tag_redraw()
+        return {"FINISHED"}
+
+
 clss = (
     ColoristaSavePreset,
     ColoristaDeletePreset,
     ColoristaSwitchDevice,
     ColoristaSwitchPrecision,
     CompositorNodeTreeImport,
+    ColoristaToggleNodeExpand,
 )
 
 register, unregister = bpy.utils.register_classes_factory(clss)

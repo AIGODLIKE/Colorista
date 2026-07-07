@@ -119,8 +119,6 @@ class ColoristaGizmos(bpy.types.GizmoGroup):
         self.gz.matrix_basis[0][3] = x
         self.gz.matrix_basis[1][3] = y
 
-        context.area.tag_redraw()
-
     def setup(self, context):
         gz = self.gizmos.new("GIZMO_GT_button_2d")
         gz.bl_idname = "ColoristaButton"
@@ -135,12 +133,11 @@ class ColoristaGizmos(bpy.types.GizmoGroup):
     def refresh(self, context: bpy.types.Context):
         self.gz.alpha = 0.5
         self.gz.color = 0.08, 0.08, 0.08
-        self.gz.color_highlight = 0.317, 0.443, 0.682  # 0.3176470696926117, 0.4431372880935669, 0.6823529601097107
+        self.gz.color_highlight = 0.317, 0.443, 0.682
         if context.space_data.shading.use_compositor == "ALWAYS":
             self.gz.alpha = 1
             self.gz.color = 0.317, 0.443, 0.682
             self.gz.color_highlight = 0.517, 0.643, 0.882
-        context.area.tag_redraw()
 
 
 clss = (

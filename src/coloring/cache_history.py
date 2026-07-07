@@ -35,14 +35,15 @@ class ColoristaDeleteHistory(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         if not self.file:
-            return {"FINISHED"}
+            return {"CANCELLED"}
         file = Path(self.file)
         if not file.exists():
-            return {"FINISHED"}
+            self.report({'ERROR'}, "History file not found")
+            return {"CANCELLED"}
         if file.is_dir():
-            return {"FINISHED"}
+            return {"CANCELLED"}
         if file.suffix.lower() != ".blend":
-            return {"FINISHED"}
+            return {"CANCELLED"}
         file.unlink()
         update_history()
         return {"FINISHED"}

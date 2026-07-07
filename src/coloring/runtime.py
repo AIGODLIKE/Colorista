@@ -2,6 +2,8 @@
 
 import bpy
 
+from .state import loaded_node_groups
+
 _active = False
 _load_post_registered = False
 
@@ -12,9 +14,7 @@ def is_active() -> bool:
 
 @bpy.app.handlers.persistent
 def _on_file_load(scene):
-    from .properties import Props
-
-    Props.loaded_node_groups.clear()
+    loaded_node_groups.clear()
     try:
         if not scene.colorista_prop.enable_coloring:
             return
@@ -71,39 +71,41 @@ def activate() -> None:
     _active = True
 
     from .handler import (
+        DepsgraphPostHandler,
         RenderHandler,
         restore_render_device,
         switch_to_cpu_device,
         update_node_group,
     )
-    from .timer import UpdateTimer1s, update_custom_vt, update_device
+    from .timer import update_custom_vt
     from ...utils.watcher import FSWatcher
 
+    DepsgraphPostHandler.add(update_node_group)
+    DepsgraphPostHandler.add(lambda scene: update_custom_vt())
+    DepsgraphPostHandler.register()
     RenderHandler.add(switch_to_cpu_device, "pre")
     RenderHandler.add(restore_render_device, "complete")
     RenderHandler.register()
-    UpdateTimer1s.add(update_device)
-    UpdateTimer1s.add(update_custom_vt)
-    UpdateTimer1s.add(lambda: update_node_group(bpy.context.scene))
-    UpdateTimer1s.register()
     FSWatcher.enable()
 
 
-def deactivate() -> None:
+def deactivate(context: bpy.types.Context | None = None) -> None:
     global _active
-    from .utils import set_viewport_shading
+    from .utils import clear_compositor, clear_node_expand_cache, set_viewport_shading
 
     if _active:
-        from .handler import RenderHandler
-        from .timer import UpdateTimer1s
+        from .handler import DepsgraphPostHandler, RenderHandler
         from ...utils.watcher import FSWatcher
 
-        UpdateTimer1s.unregister()
+        DepsgraphPostHandler.unregister()
         RenderHandler.unregister()
         FSWatcher.disable()
         _active = False
 
     try:
+        scene = (context or bpy.context).scene
+        clear_node_expand_cache()
+        clear_compositor(scene)
         set_viewport_shading("DISABLED")
     except Exception:
         pass
@@ -119,5 +121,8 @@ def register():
 
 
 def unregister():
-    deactivate()
+    try:
+        deactivate(bpy.context)
+    except Exception:
+        deactivate(None)
     _unregister_load_post()

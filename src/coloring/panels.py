@@ -1,9 +1,16 @@
 import bpy
-from .operators import ColoristaSavePreset, ColoristaDeletePreset, ColoristaSwitchDevice, ColoristaSwitchPrecision
+from .operators import (
+    ColoristaSavePreset,
+    ColoristaDeletePreset,
+    ColoristaSwitchDevice,
+    ColoristaSwitchPrecision,
+    ColoristaToggleNodeExpand,
+)
 from ..preference import get_pref
 from ...utils.icon import Icon
 from ...utils.common import grd
 from ...utils.node import get_comp_node_tree, scene_uses_compositor
+from .utils import node_is_expanded
 
 
 class ColoringPanel(bpy.types.Panel):
@@ -43,12 +50,23 @@ class ColoringPanel(bpy.types.Panel):
                 continue
             box = layout.box()
             row = box.row()
-            row.prop(node, "ac_expand", icon="TRIA_DOWN" if node.ac_expand else "TRIA_RIGHT", text="", emboss=False)
+            expanded = node_is_expanded(node)
+            tree = get_comp_node_tree(context.scene)
+            if tree is None:
+                continue
+            op = row.operator(
+                ColoristaToggleNodeExpand.bl_idname,
+                text="",
+                icon="TRIA_DOWN" if expanded else "TRIA_RIGHT",
+                emboss=False,
+            )
+            op.node_name = node.name
+            op.tree_name = getattr(tree, "name_full", tree.name)
             if node.type != "GROUP":
                 row.label(text=node.name)
             elif node.node_tree:
                 row.label(text=node.node_tree.name)
-            if node.ac_expand is False:
+            if not expanded:
                 continue
             if bpy.app.version >= (4, 2):
                 box.separator(type="LINE")

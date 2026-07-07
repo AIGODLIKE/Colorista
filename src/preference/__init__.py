@@ -57,6 +57,12 @@ class Preferences(bpy.types.AddonPreferences):
     force_use_cpu_render_image: bpy.props.BoolProperty(name="Force Use CPU Render Image", default=False,
                                                        translation_context=PROP_TCTX)
 
+    main_node_group_name: bpy.props.StringProperty(
+        name="Main Node Group Name",
+        default="Basic adjustment nodes for colorists",
+        translation_context=PROP_TCTX,
+    )
+
     def update_enable_logging(self, context):
         from ...utils.logger import configure_logger
         configure_logger(self.enable_logging)
@@ -69,6 +75,7 @@ class Preferences(bpy.types.AddonPreferences):
         layout = self.layout
         layout.prop(self, "use_asset_color_space_pref")
         layout.prop(self, "gizmo_offset")
+        layout.prop(self, "main_node_group_name")
         layout.prop(self, "ui_icon_scale")
         row = layout.row()
         row.prop(self, "cache_current_compositor", toggle=True)

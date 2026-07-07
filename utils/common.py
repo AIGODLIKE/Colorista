@@ -24,14 +24,29 @@ def get_resource_dir() -> Path:
 
 
 def grd() -> Path:
-    """
-    简写版
-    """
     return get_resource_dir()
 
 
+def _dir_has_assets(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    try:
+        for entry in path.iterdir():
+            if entry.is_dir():
+                return True
+    except OSError:
+        return False
+    return False
+
+
 def get_resource_dir_locale() -> Path:
-    return get_resource_dir() / _get_locale_suffix()
+    preferred = get_resource_dir() / _get_locale_suffix()
+    if _dir_has_assets(preferred):
+        return preferred
+    fallback = get_resource_dir() / "CN"
+    if _dir_has_assets(fallback):
+        return fallback
+    return preferred
 
 
 def get_package_root() -> str:
@@ -44,8 +59,24 @@ def get_user_cache_dir() -> Path:
     return cache
 
 
+def find_first_blend(directory: Path) -> Path | None:
+    if not directory.is_dir():
+        return None
+    blends = sorted(directory.glob("*.blend"), key=lambda p: p.name.lower())
+    return blends[0] if blends else None
+
+
 def get_default_preset_path() -> Path:
-    return get_resource_dir_locale() / "default" / "default.blend"
+    candidates = (
+        get_resource_dir_locale() / "default" / "default",
+        get_resource_dir() / "CN" / "default" / "default",
+        get_resource_dir_locale() / "Default" / "default",
+    )
+    for directory in candidates:
+        preset = find_first_blend(directory)
+        if preset is not None:
+            return preset
+    return get_resource_dir_locale() / "default" / "default" / "default.blend"
 
 
 @lru_cache(maxsize=4)

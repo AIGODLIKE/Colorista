@@ -20,6 +20,7 @@ translations = (
     ("Force Use CPU Render Image", "强制使用CPU渲染图像", PROP_TCTX),
     ("Cache Count", "缓存合成树数量", PROP_TCTX),
     ("Enable Logging", "启用日志", PROP_TCTX),
+    ("Main Node Group Name", "主节点组名称", PROP_TCTX),
     ("Load Compositor: {}", "加载成功: {}"),
     ("Overwrite preset: {}?", "是否覆盖 {}?"),
     ("Delete {}'s preset: {}?", "是否删除 {} 的预设: {}?"),
