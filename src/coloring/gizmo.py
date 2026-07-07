@@ -101,7 +101,8 @@ class ColoristaGizmos(bpy.types.GizmoGroup):
         # 计算按钮控件高度: 当显示gizmo控件 且 显示漫游控件ui
         if bpy.context.space_data.show_gizmo_navigate and view_pref.show_navigate_ui:
             h += icon_offset_mini * 4
-        h += icon_offset_mini * get_pref().gizmo_offset
+        pref = get_pref()
+        h += icon_offset_mini * (pref.gizmo_offset if pref else 0)
         return h * ui_scale
 
     def draw_prepare(self, context: bpy.types.Context):

@@ -1,11 +1,14 @@
 import bpy
-import traceback
 from functools import partial
+
+from ...utils.logger import logger
 from ...utils.node import get_comp_node_tree
 
 
 class UpdateTimer1s:
     timers: dict[callable, None] = {}
+    _prun = None
+    _registered = False
 
     @classmethod
     def add(cls, timer):
@@ -21,24 +24,33 @@ class UpdateTimer1s:
             try:
                 timer()
             except Exception:
-                traceback.print_exc()
+                logger.exception("Timer callback failed")
 
     @classmethod
     def _run(cls,):
         try:
             cls._run_ex()
         except Exception:
-            traceback.print_exc()
+            logger.exception("UpdateTimer1s failed")
         return 1
 
     @classmethod
     def register(cls):
+        if cls._registered:
+            return
         cls._prun = partial(cls._run)
         bpy.app.timers.register(cls._prun, first_interval=1, persistent=True)
+        cls._registered = True
 
     @classmethod
     def unregister(cls):
-        bpy.app.timers.unregister(cls._prun)
+        if cls._registered and cls._prun is not None:
+            try:
+                bpy.app.timers.unregister(cls._prun)
+            except Exception:
+                pass
+        cls._registered = False
+        cls._prun = None
         cls.timers.clear()
 
 
@@ -50,16 +62,7 @@ def update_device():
     render = bpy.context.scene.render
     if render.compositor_device != "GPU":
         render.compositor_device = "GPU"
-        print("Changed compositor device to GPU")
-
-
-def set_attr_if_not_equal(obj, attr, value):
-    try:
-        if getattr(obj, attr) == value:
-            return
-        setattr(obj, attr, value)
-    except Exception:
-        ...
+        logger.debug("Changed compositor device to GPU")
 
 
 VTC_NAME = "colorista-Color Space"
@@ -68,16 +71,16 @@ VTC_NAME = "colorista-Color Space"
 def has_custom_vt_control() -> bool:
     tree = get_comp_node_tree(bpy.context.scene)
     if not tree:
-        return
+        return False
     color_space_control = tree.nodes.get(VTC_NAME)
     if not color_space_control:
-        return
+        return False
     if not color_space_control.inputs:
-        return
+        return False
     space = color_space_control.inputs.get("Space")
     if not space:
         space = color_space_control.inputs[0]
-    return True
+    return space is not None
 
 
 def update_custom_vt():
@@ -86,6 +89,8 @@ def update_custom_vt():
     tree = get_comp_node_tree(bpy.context.scene)
     color_space_control = tree.nodes.get(VTC_NAME)
     space = color_space_control.inputs.get("Space")
+    if not space:
+        space = color_space_control.inputs[0]
     try:
         color_space = float(space.default_value)
         ori_vt = bpy.context.scene.view_settings.view_transform
@@ -99,32 +104,8 @@ def update_custom_vt():
         if abs(space_value - color_space) < 0.00001:
             return
         space.default_value = space_value
-        # vt = ori_vt
-        # if abs(color_space) < 0.001:
-        #     # AgX
-        #     vt = "AgX"
-        # elif abs(color_space - 0.1) < 0.001:
-        #     vt = "Standard"
-        # elif abs(color_space - 0.2) < 0.001:
-        #     vt = "Filmic"
-        # elif abs(color_space - 0.3) < 0.001:
-        #     vt = "Khronos PBR Neutral"
-        # if vt != ori_vt:
-        #     bpy.context.scene.view_settings.view_transform = vt
     except Exception:
         pass
-
-
-def update_color_manager():
-    return
-    if not bpy.context.scene.colorista_prop.enable_coloring:
-        return
-    if not has_custom_vt_control():
-        set_attr_if_not_equal(bpy.context.scene.view_settings, "view_transform", "Raw")
-    set_attr_if_not_equal(bpy.context.scene.view_settings, "look", "None")
-    set_attr_if_not_equal(bpy.context.scene.view_settings, "exposure", 0)
-    set_attr_if_not_equal(bpy.context.scene.view_settings, "gamma", 1)
-    set_attr_if_not_equal(bpy.context.scene.view_settings, "use_curve_mapping", False)
 
 
 def register():

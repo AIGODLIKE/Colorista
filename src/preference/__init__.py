@@ -10,8 +10,14 @@ def get_package() -> str:
     return __package__.rsplit(".", 2)[0]
 
 
-def get_pref() -> Preferences:
-    return bpy.context.preferences.addons[get_package()].preferences
+def get_pref() -> Preferences | None:
+    try:
+        addon = bpy.context.preferences.addons.get(get_package())
+        if addon is not None:
+            return addon.preferences
+    except Exception:
+        pass
+    return None
 
 
 class Preferences(bpy.types.AddonPreferences):
@@ -59,8 +65,6 @@ class Preferences(bpy.types.AddonPreferences):
                                            update=update_enable_logging,
                                            translation_context=PROP_TCTX)
 
-    debug: bpy.props.BoolProperty(name="Debug", default=False)
-
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "use_asset_color_space_pref")
@@ -73,7 +77,6 @@ class Preferences(bpy.types.AddonPreferences):
         layout.separator()
 
         layout.prop(self, "enable_logging")
-        layout.prop(self, "debug")
 
 
 def register():

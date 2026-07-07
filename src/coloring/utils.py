@@ -3,7 +3,13 @@ import bpy
 
 def get_viewport_shadings() -> list[bpy.types.View3DShading]:
     shadings = []
-    for area in bpy.context.screen.areas:
+    try:
+        screen = bpy.context.screen
+    except AttributeError:
+        return shadings
+    if screen is None:
+        return shadings
+    for area in screen.areas:
         if area.type != "VIEW_3D":
             continue
         shadings += [s.shading for s in area.spaces if s.type == "VIEW_3D"]

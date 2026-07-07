@@ -19,10 +19,18 @@ class FSWatcher:
     _watcher_callback = {}
     _watcher_queue = deque()
     _running = False
+    _enabled = False
 
     @classmethod
-    def init(cls) -> None:
-        cls._run()
+    def enable(cls) -> None:
+        cls._enabled = True
+        if cls._watcher_path:
+            cls._run()
+
+    @classmethod
+    def disable(cls) -> None:
+        cls._enabled = False
+        cls.stop()
 
     @classmethod
     def register(cls, path, callback=None):
@@ -41,6 +49,8 @@ class FSWatcher:
 
     @classmethod
     def _run(cls):
+        if not cls._enabled:
+            return
         if cls._running:
             return
         cls._running = True

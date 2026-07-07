@@ -17,6 +17,8 @@ def register():
 def unregister():
     from .utils.icon import Icon
 
-    unreg()
-    Icon.cleanup()
-    logger.close()
+    try:
+        unreg()
+    finally:
+        Icon.cleanup()
+        logger.close()
