@@ -50,6 +50,7 @@ def copy_node_tree_drivers(sf: bpy.types.Scene, st: bpy.types.Scene):
         st_tree.animation_data_create()
     for driver in sf_tree.animation_data.drivers:
         st_tree.animation_data.drivers.from_existing(src_driver=driver)
+    remap_scene_compositor_driver_paths(st_tree.animation_data)
 
 
 def copy_comp_node_tree(sf: bpy.types.Scene, st: bpy.types.Scene):
@@ -101,3 +102,25 @@ def get_comp_node_tree(sce: bpy.types.Scene) -> bpy.types.CompositorNodeTree:
     if bpy.app.version >= (5, 0):
         return sce.compositing_node_group
     return sce.node_tree
+
+
+def remap_scene_compositor_driver_paths(an: bpy.types.AnimData) -> None:
+    """Remap legacy scene.node_tree paths in drivers for Blender 5.x."""
+    if bpy.app.version < (5, 0, 0) or not an:
+        return
+    old_prefix = "node_tree."
+    new_prefix = "compositing_node_group."
+
+    def _remap(path: str) -> str:
+        if path.startswith(old_prefix):
+            return new_prefix + path[len(old_prefix):]
+        return path
+
+    for fc in an.drivers:
+        fc.data_path = _remap(fc.data_path)
+        driver = fc.driver
+        if not driver:
+            continue
+        for var in driver.variables:
+            for target in var.targets:
+                target.data_path = _remap(target.data_path)

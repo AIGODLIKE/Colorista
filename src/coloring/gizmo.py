@@ -47,7 +47,7 @@ class ColoristaGzOps(bpy.types.Operator):
             return False
 
     def execute(self, context):
-        toggle_viewport_shading()
+        toggle_viewport_shading(context)
         return {'FINISHED'}
 
 

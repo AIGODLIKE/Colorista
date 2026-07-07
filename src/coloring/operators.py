@@ -19,6 +19,7 @@ from ...utils.node import (
     copy_node_tree_drivers,
     ensure_comp_node_tree,
     get_comp_node_tree,
+    remap_scene_compositor_driver_paths,
     scene_uses_compositor,
 )
 
@@ -305,8 +306,9 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         self.sync_settings(sce, from_sce)
         self.copy_drivers(from_sce, sce)
 
-    def enable_coloring_f(self, preset):
-        sce = bpy.context.scene
+    def enable_coloring_f(self, preset, context=None):
+        context = context or bpy.context
+        sce = context.scene
         preset_path = Path(preset)
         if not preset_path.exists():
             logger.error("Preset not found: %s", preset_path)
@@ -329,7 +331,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         if (4, 2) <= bpy.app.version <= (4, 3):
             sce.render.compositor_device = "GPU"
         # 4. 状态开启
-        set_viewport_shading("ALWAYS")
+        set_viewport_shading("ALWAYS", context)
         ensure_comp_node_tree(bpy.context.scene)
         sce_tree = get_comp_node_tree(sce)
         if sce_tree and bpy.app.version < (5, 0, 0):
@@ -383,6 +385,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
     def reload_drivers(self, an: bpy.types.AnimData):
         if not an:
             return
+        remap_scene_compositor_driver_paths(an)
         targets = [t for d in an.drivers for v in d.driver.variables for t in v.targets if v.type == "CONTEXT_PROP"]
         for t in targets:
             t.data_path = t.data_path
@@ -395,7 +398,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         if self.preset:
             preset = Path(self.preset)
             self.preset = ""
-        self.enable_coloring_f(preset)
+        self.enable_coloring_f(preset, context)
         return {"FINISHED"}
 
 
