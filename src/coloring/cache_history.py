@@ -1,8 +1,9 @@
 import bpy
 from pathlib import Path
 from .operators import CompositorNodeTreeImport
-from ...utils.common import get_resource_dir
+from ...utils.common import get_user_cache_dir
 from ..preference import get_pref
+from ...utils.logger import logger
 
 
 class ColoristaHistoryItem(bpy.types.PropertyGroup):
@@ -50,22 +51,20 @@ class ColoristaDeleteHistory(bpy.types.Operator):
 @bpy.app.handlers.persistent
 def update_history(_=None):
     try:
-        cache_dir = get_resource_dir().joinpath("cache")
-        cache_dir.mkdir(exist_ok=True)
+        cache_dir = get_user_cache_dir()
         sce = bpy.context.scene
         files = sorted(cache_dir.glob("*.blend"), reverse=True)
-        count = get_pref().cache_current_cache_count
+        pref = get_pref()
+        count = pref.cache_current_cache_count if pref else 10
         sce.colorista_items.clear()
         for file in files[:count]:
             item = sce.colorista_items.add()
             item.name = file.stem
             item.file = file.as_posix()
-        # 只保留最新的, 其余删除
         for file in files[count:]:
             file.unlink()
     except Exception as e:
-        print("Update History Error: ", e)
-    return 1
+        logger.error("Update history failed: %s", e)
 
 
 clss = (
@@ -81,11 +80,9 @@ def register():
     reg()
     bpy.types.Scene.colorista_items = bpy.props.CollectionProperty(type=ColoristaHistoryItem)
     bpy.types.Scene.colorista_items_index = bpy.props.IntProperty(default=0)
-    bpy.app.handlers.load_post.append(update_history)
 
 
 def unregister():
     del bpy.types.Scene.colorista_items_index
     del bpy.types.Scene.colorista_items
     unreg()
-    bpy.app.handlers.load_post.remove(update_history)

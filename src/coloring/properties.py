@@ -11,13 +11,6 @@ PROP_TCTX = "ColoristaTCTX"
 PANEL_TCTX = "ColoristaPanelTCTX"
 
 
-def _enum_index(items, value: str) -> int:
-    for i, item in enumerate(items):
-        if item[0] == value:
-            return i
-    return 0
-
-
 class Props(bpy.types.PropertyGroup):
     loaded_node_groups = set()
     PRESET_NONE_ID = "__NONE__"
@@ -92,22 +85,40 @@ class Props(bpy.types.PropertyGroup):
             items.append((f.as_posix(), f.stem, f.stem, icon_id, len(items)))
         return self._ref_items.get(rdir, [])
 
+    def get_asset_index(self, context) -> int:
+        items = self.asset_items(context)
+        if not items:
+            return 0
+        valid = {item[4] for item in items}
+        current = self.get("asset", 0)
+        if isinstance(current, str):
+            for item in items:
+                if item[0] == current:
+                    return item[4]
+            return items[0][4]
+        if current not in valid:
+            return items[0][4]
+        return current
+
+    def get_asset_path(self, context) -> str:
+        items = self.asset_items(context)
+        if not items:
+            return ""
+        index = self.get_asset_index(context)
+        for item in items:
+            if item[4] == index:
+                return item[0]
+        return items[0][0]
+
     def set_asset(self, value):
         self["asset"] = value
         bpy.ops.wm.colorista_compositor_import()
 
     def get_asset(self):
         try:
-            items = self.asset_items(bpy.context)
+            return self.get_asset_index(bpy.context)
         except AttributeError:
-            return ""
-
-        valid = {item[0] for item in items}
-        current = self.get("asset", "")
-        if current not in valid:
-            current = items[0][0] if items else ""
-            self["asset"] = current
-        return current
+            return 0
 
     asset: bpy.props.EnumProperty(name="Asset",
                                   items=asset_items,
@@ -122,8 +133,9 @@ class Props(bpy.types.PropertyGroup):
         items = self.asset_items(context)
         if not items:
             return
-        idx = _enum_index(items, self.asset)
-        self.asset = items[(idx - 1) % len(items)][0]
+        idx = self.get_asset_index(context)
+        pos = next(i for i, item in enumerate(items) if item[4] == idx)
+        self.asset = items[(pos - 1) % len(items)][0]
 
     last_asset: bpy.props.BoolProperty(default=False,
                                        name="Last Asset",
@@ -138,8 +150,9 @@ class Props(bpy.types.PropertyGroup):
         items = self.asset_items(context)
         if not items:
             return
-        idx = _enum_index(items, self.asset)
-        self.asset = items[(idx + 1) % len(items)][0]
+        idx = self.get_asset_index(context)
+        pos = next(i for i, item in enumerate(items) if item[4] == idx)
+        self.asset = items[(pos + 1) % len(items)][0]
 
     next_asset: bpy.props.BoolProperty(default=False,
                                        name="Next Asset",
@@ -148,10 +161,10 @@ class Props(bpy.types.PropertyGroup):
                                        )
 
     def get_presets(self, context):
-        asset = self.asset
-        if not asset:
+        asset_path = self.get_asset_path(context)
+        if not asset_path:
             return [(self.PRESET_NONE_ID, "None", "No preset available", 0)]
-        rdir = Path(asset).with_suffix("")
+        rdir = Path(asset_path).with_suffix("")
         FSWatcher.register(rdir)
         if not FSWatcher.consume_change(rdir) and rdir in self._ref_items:
             return self._ref_items.get(rdir, [])
@@ -163,23 +176,41 @@ class Props(bpy.types.PropertyGroup):
             items.append((self.PRESET_NONE_ID, "None", "No preset available", 0))
         return self._ref_items.get(rdir, [])
 
+    def get_preset_index(self, context) -> int:
+        items = self.get_presets(context)
+        if not items:
+            return 0
+        valid = set(range(len(items)))
+        current = self.get("preset", 0)
+        if isinstance(current, str):
+            for i, item in enumerate(items):
+                if item[0] == current:
+                    return i
+            return 0
+        if current not in valid:
+            return 0
+        return current
+
+    def get_preset_path(self, context) -> str:
+        items = self.get_presets(context)
+        if not items:
+            return self.PRESET_NONE_ID
+        index = self.get_preset_index(context)
+        if 0 <= index < len(items):
+            return items[index][0]
+        return items[0][0]
+
     def set_preset(self, value):
         self["preset"] = value
-        if self.preset != self.PRESET_NONE_ID:
-            bpy.ops.wm.colorista_compositor_import(preset=self.preset)
+        path = self.get_preset_path(bpy.context)
+        if path != self.PRESET_NONE_ID:
+            bpy.ops.wm.colorista_compositor_import(preset=path)
 
     def get_preset(self):
         try:
-            items = self.get_presets(bpy.context)
+            return self.get_preset_index(bpy.context)
         except AttributeError:
-            return self.PRESET_NONE_ID
-
-        valid = {item[0] for item in items}
-        current = self.get("preset", self.PRESET_NONE_ID)
-        if current not in valid:
-            current = items[0][0] if items else self.PRESET_NONE_ID
-            self["preset"] = current
-        return current
+            return 0
 
     preset: bpy.props.EnumProperty(name="Preset",
                                    items=get_presets,
@@ -195,7 +226,7 @@ class Props(bpy.types.PropertyGroup):
         items = self.get_presets(context)
         if not items:
             return
-        idx = _enum_index(items, self.preset)
+        idx = self.get_preset_index(context)
         self.preset = items[(idx - 1) % len(items)][0]
 
     last_preset: bpy.props.BoolProperty(default=False,
@@ -211,7 +242,7 @@ class Props(bpy.types.PropertyGroup):
         items = self.get_presets(context)
         if not items:
             return
-        idx = _enum_index(items, self.preset)
+        idx = self.get_preset_index(context)
         self.preset = items[(idx + 1) % len(items)][0]
 
     next_preset: bpy.props.BoolProperty(default=False,
@@ -226,18 +257,6 @@ class Props(bpy.types.PropertyGroup):
                                                )
 
 
-@bpy.app.handlers.persistent
-def reload_handler(sce):
-    Props.loaded_node_groups.clear()
-    try:
-        if sce.colorista_prop.enable_coloring:
-            from .runtime import activate
-
-            activate()
-    except AttributeError:
-        pass
-
-
 clss = (
     Props,
 )
@@ -249,14 +268,9 @@ def register():
     reg()
     bpy.types.Scene.colorista_prop = bpy.props.PointerProperty(type=Props)
     bpy.types.Node.ac_expand = bpy.props.BoolProperty(name="Expand", default=True)
-    bpy.app.handlers.load_post.append(reload_handler)
 
 
 def unregister():
-    from .runtime import deactivate
-
-    deactivate()
     unreg()
-    bpy.app.handlers.load_post.remove(reload_handler)
     del bpy.types.Node.ac_expand
     del bpy.types.Scene.colorista_prop

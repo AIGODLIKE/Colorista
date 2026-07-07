@@ -3,7 +3,7 @@ from .operators import ColoristaSavePreset, ColoristaDeletePreset, ColoristaSwit
 from ..preference import get_pref
 from ...utils.icon import Icon
 from ...utils.common import grd
-from ...utils.node import get_comp_node_tree
+from ...utils.node import get_comp_node_tree, scene_uses_compositor
 
 
 class ColoringPanel(bpy.types.Panel):
@@ -25,7 +25,7 @@ class ColoringPanel(bpy.types.Panel):
             return
         box = layout.box()
         self.show_assets(box)
-        if not context.scene.use_nodes:
+        if not scene_uses_compositor(context.scene):
             return
         nodes: list[bpy.types.Node] = []
         for node in get_comp_node_tree(context.scene).nodes:
@@ -91,12 +91,14 @@ class ColoringPanel(bpy.types.Panel):
             row.operator(ColoristaSwitchDevice.bl_idname, icon_value=icon, text="")
 
             row.alert = False
-        row.alert = get_pref().use_asset_color_space_pref
-        row.prop(get_pref(), "use_asset_color_space_pref", text="", icon="FILE_REFRESH")
-        row.alert = get_pref().cache_current_compositor
-        row.prop(get_pref(), "cache_current_compositor", text="", icon="DOCUMENTS")
-        row.alert = get_pref().force_use_cpu_render_image
-        row.prop(get_pref(), "force_use_cpu_render_image", text="", icon="GEOMETRY_SET")
+        pref = get_pref()
+        if pref:
+            row.alert = pref.use_asset_color_space_pref
+            row.prop(pref, "use_asset_color_space_pref", text="", icon="FILE_REFRESH")
+            row.alert = pref.cache_current_compositor
+            row.prop(pref, "cache_current_compositor", text="", icon="DOCUMENTS")
+            row.alert = pref.force_use_cpu_render_image
+            row.prop(pref, "force_use_cpu_render_image", text="", icon="GEOMETRY_SET")
         row.alert = False
         row.popover(ColoristaHistoryPanel.bl_idname, text="", icon="RECOVER_LAST")
         row.operator("wm.url_open", text="", icon="URL").url = "https://github.com/AIGODLIKE/Colorista"
@@ -120,7 +122,8 @@ class ColoringPanel(bpy.types.Panel):
         row.prop(prop, "pre_dir", text="")
         row.prop(prop, "asset", text="")
         row = layout.row()
-        row.scale_y = get_pref().ui_icon_scale
+        pref = get_pref()
+        row.scale_y = pref.ui_icon_scale if pref else 8
         row.scale_x = 1.05
         row.prop(prop, "last_asset", text="", icon="TRIA_LEFT")
         sub = row.row()

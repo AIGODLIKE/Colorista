@@ -1,15 +1,26 @@
 import bpy
-import traceback
-from ..preference import get_pref
-from ...utils.logger import logger
-from ...utils.common import get_resource_dir_locale, get_resource_dir
-from ...utils.node import copy_comp_node_tree, get_comp_node_tree, ensure_comp_node_tree
-from ...utils.node import copy_node_properties, copy_node_tree_drivers
+from datetime import datetime
+from pathlib import Path
+
 from ..i18n import _T
+from ..preference import get_pref
 from .properties import Props
 from .utils import set_viewport_shading
-from pathlib import Path
-from datetime import datetime
+from ...utils.common import (
+    get_default_preset_path,
+    get_resource_dir,
+    get_resource_dir_locale,
+    get_user_cache_dir,
+)
+from ...utils.logger import logger
+from ...utils.node import (
+    copy_comp_node_tree,
+    copy_node_properties,
+    copy_node_tree_drivers,
+    ensure_comp_node_tree,
+    get_comp_node_tree,
+    scene_uses_compositor,
+)
 
 
 class ColoristaSavePreset(bpy.types.Operator):
@@ -23,7 +34,7 @@ class ColoristaSavePreset(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
-        return context.scene.use_nodes
+        return scene_uses_compositor(context.scene)
 
     def draw(self, context):
         layout = self.layout
@@ -32,7 +43,7 @@ class ColoristaSavePreset(bpy.types.Operator):
         layout.label(text=_T("Overwrite preset: {}?").format(path.stem), icon="QUESTION")
 
     def get_preset_path(self):
-        asset = bpy.context.scene.colorista_prop.asset
+        asset = bpy.context.scene.colorista_prop.get_asset_path(bpy.context)
         preset_name = bpy.context.scene.colorista_prop.preset_save_name
         preset = Path(asset).with_suffix("").joinpath(preset_name)
         if self.preset:
@@ -40,7 +51,7 @@ class ColoristaSavePreset(bpy.types.Operator):
         return preset.with_suffix(".blend")
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
-        if not context.scene.colorista_prop.asset:
+        if not context.scene.colorista_prop.get_asset_path(context):
             return {"CANCELLED"}
         if not context.scene.colorista_prop.preset_save_name:
             return {"CANCELLED"}
@@ -105,12 +116,13 @@ class ColoristaDeletePreset(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
-        return context.scene.colorista_prop.asset and context.scene.colorista_prop.preset
+        prop = context.scene.colorista_prop
+        return bool(prop.get_asset_path(context)) and prop.get_preset_path(context) != prop.PRESET_NONE_ID
 
     def draw(self, context: bpy.types.Context):
         layout = self.layout
-        asset = Path(context.scene.colorista_prop.asset).stem
-        preset = Path(context.scene.colorista_prop.preset).stem
+        asset = Path(context.scene.colorista_prop.get_asset_path(context)).stem
+        preset = Path(context.scene.colorista_prop.get_preset_path(context)).stem
         layout.alert = True
         layout.label(text=_T("Delete {}'s preset: {}?").format(asset, preset), icon="TRASH")
 
@@ -119,7 +131,7 @@ class ColoristaDeletePreset(bpy.types.Operator):
         return wm.invoke_props_dialog(self, width=200)
 
     def execute(self, context: bpy.types.Context):
-        path = Path(context.scene.colorista_prop.preset)
+        path = Path(context.scene.colorista_prop.get_preset_path(context))
         if not path or not path.exists():
             self.report({'ERROR'}, "Cannot find preset")
             return {"CANCELLED"}
@@ -212,7 +224,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             sce = self._load_compositor_scene(data_path.as_posix())
         except Exception:
             sce = None
-            traceback.print_exc()
+            logger.exception("Failed to load compositor scene from %s", data_path)
         return sce
 
     def sync_view_layer_passs(self, vf: bpy.types.ViewLayer, vt: bpy.types.ViewLayer):
@@ -249,7 +261,8 @@ class CompositorNodeTreeImport(bpy.types.Operator):
                 pass
 
     def sync_settings(self, current_sce: bpy.types.Scene, loaded_sce: bpy.types.Scene):
-        if not get_pref().use_asset_color_space_pref:
+        pref = get_pref()
+        if not pref or not pref.use_asset_color_space_pref:
             return
         try:
             current_sce.display_settings.display_device = loaded_sce.display_settings.display_device
@@ -334,12 +347,17 @@ class CompositorNodeTreeImport(bpy.types.Operator):
 
     def enable_coloring_f(self, preset):
         sce = bpy.context.scene
-        # 1. 如果开启缓存当前合成器 则 调用备份
-        if get_pref().cache_current_compositor and not self.no_cache and sce.use_nodes:
+        preset_path = Path(preset)
+        if not preset_path.exists():
+            logger.error("Preset not found: %s", preset_path)
+            return
+
+        pref = get_pref()
+        if pref and pref.cache_current_compositor and not self.no_cache and scene_uses_compositor(sce):
             from .cache_history import update_history
 
             name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-            path = get_resource_dir() / f"cache/{name}.blend"
+            path = get_user_cache_dir() / f"{name}.blend"
             try:
                 bpy.ops.wm.colorista_save_preset(preset=path.as_posix(), popup=False)
             except Exception as e:
@@ -354,7 +372,8 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         set_viewport_shading("ALWAYS")
         ensure_comp_node_tree(bpy.context.scene)
         sce_tree = get_comp_node_tree(sce)
-        sce_tree.nodes.clear()  # 加载前清理节点树
+        if sce_tree and bpy.app.version < (5, 0, 0):
+            sce_tree.nodes.clear()
         old_nts = set(bpy.data.node_groups)
         load_sce = self.load_compositor_sce(preset)
         new_nts = set(bpy.data.node_groups) - old_nts
@@ -400,9 +419,10 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             t.data_path = t.data_path
 
     def execute(self, context: bpy.types.Context):
-        preset = bpy.context.scene.colorista_prop.asset
+        prop = context.scene.colorista_prop
+        preset = prop.get_asset_path(context)
         if self.use_default:
-            preset = get_resource_dir_locale() / "Default/default.blend"
+            preset = get_default_preset_path()
         if self.preset:
             preset = Path(self.preset)
             self.preset = ""

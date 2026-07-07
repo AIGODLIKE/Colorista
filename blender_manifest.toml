@@ -19,3 +19,14 @@ license = [
 
 [permissions]
 files = "Import compositor presets and cache files"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/.idea/",
+  "/utils/logs/",
+  "/resource/cache/",
+  "/utils/timeit.py",
+  "/*.zip",
+]

@@ -1,5 +1,13 @@
 import bpy
 
+from .logger import logger
+
+
+def scene_uses_compositor(sce: bpy.types.Scene) -> bool:
+    if bpy.app.version >= (5, 0, 0):
+        return sce.compositing_node_group is not None
+    return bool(sce.use_nodes)
+
 
 def copy_node_properties(nf: bpy.types.Node, nt: bpy.types.Node):
     """
@@ -21,7 +29,12 @@ def copy_node_properties(nf: bpy.types.Node, nt: bpy.types.Node):
         try:
             nt.inputs[inp.identifier].default_value = inp.default_value
         except ValueError:
-            print("Error copying node property:", inp.identifier, nt.inputs[inp.identifier].default_value, inp.default_value)
+            logger.debug(
+                "Error copying node property: %s %s %s",
+                inp.identifier,
+                nt.inputs[inp.identifier].default_value,
+                inp.default_value,
+            )
         except AttributeError:
             pass
 
@@ -63,7 +76,12 @@ def copy_comp_node_tree(sf: bpy.types.Scene, st: bpy.types.Scene):
             tsocket = tnode.inputs[link.to_socket.identifier]
             st_tree.links.new(tsocket, fsocket)
         except KeyError:
-            print("KeyError:", link.from_node.name, link.to_node.name, link.from_socket.identifier)
+            logger.debug(
+                "KeyError linking nodes: %s %s %s",
+                link.from_node.name,
+                link.to_node.name,
+                link.from_socket.identifier,
+            )
     for node in st_tree.nodes:
         if node.type == "R_LAYERS":
             node.scene = None

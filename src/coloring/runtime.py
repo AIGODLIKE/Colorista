@@ -1,10 +1,67 @@
 """Activate/defer handlers and timers until coloring is enabled."""
 
+import bpy
+
 _active = False
+_load_post_registered = False
 
 
 def is_active() -> bool:
     return _active
+
+
+@bpy.app.handlers.persistent
+def _on_file_load(scene):
+    from .properties import Props
+
+    Props.loaded_node_groups.clear()
+    try:
+        if not scene.colorista_prop.enable_coloring:
+            return
+        activate()
+        from .cache_history import update_history
+
+        update_history()
+    except AttributeError:
+        pass
+
+
+def _register_load_post():
+    global _load_post_registered
+    if _load_post_registered:
+        return
+    bpy.app.handlers.load_post.append(_on_file_load)
+    _load_post_registered = True
+
+
+def _unregister_load_post():
+    global _load_post_registered
+    if not _load_post_registered:
+        return
+    try:
+        bpy.app.handlers.load_post.remove(_on_file_load)
+    except ValueError:
+        pass
+    _load_post_registered = False
+
+
+def bootstrap_coloring_state():
+    try:
+        scenes = bpy.data.scenes
+    except AttributeError:
+        return
+    for scene in scenes:
+        try:
+            if scene.colorista_prop.enable_coloring:
+                activate()
+                return
+        except AttributeError:
+            pass
+
+
+def _deferred_bootstrap():
+    bootstrap_coloring_state()
+    return None
 
 
 def activate() -> None:
@@ -14,23 +71,22 @@ def activate() -> None:
     _active = True
 
     from .handler import (
-        DepsgraphPostHandler,
         RenderHandler,
         restore_render_device,
         switch_to_cpu_device,
-        update_custom_vt,
         update_node_group,
     )
-    from .timer import UpdateTimer1s, update_device
+    from .timer import UpdateTimer1s, update_custom_vt, update_device
+    from ...utils.watcher import FSWatcher
 
-    DepsgraphPostHandler.add(update_node_group)
-    DepsgraphPostHandler.add(update_custom_vt)
-    DepsgraphPostHandler.register()
     RenderHandler.add(switch_to_cpu_device, "pre")
     RenderHandler.add(restore_render_device, "complete")
     RenderHandler.register()
     UpdateTimer1s.add(update_device)
+    UpdateTimer1s.add(update_custom_vt)
+    UpdateTimer1s.add(lambda: update_node_group(bpy.context.scene))
     UpdateTimer1s.register()
+    FSWatcher.enable()
 
 
 def deactivate() -> None:
@@ -38,18 +94,30 @@ def deactivate() -> None:
     from .utils import set_viewport_shading
 
     if _active:
-        from .handler import DepsgraphPostHandler, RenderHandler
+        from .handler import RenderHandler
         from .timer import UpdateTimer1s
+        from ...utils.watcher import FSWatcher
 
         UpdateTimer1s.unregister()
-        DepsgraphPostHandler.unregister()
         RenderHandler.unregister()
+        FSWatcher.disable()
         _active = False
 
-    set_viewport_shading("DISABLED")
+    try:
+        set_viewport_shading("DISABLED")
+    except Exception:
+        pass
 
     from ...utils.timer import Timer
-    from ...utils.watcher import FSWatcher
 
-    FSWatcher.stop()
     Timer.unreg()
+
+
+def register():
+    _register_load_post()
+    bpy.app.timers.register(_deferred_bootstrap, first_interval=0)
+
+
+def unregister():
+    deactivate()
+    _unregister_load_post()

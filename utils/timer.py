@@ -1,5 +1,4 @@
 import bpy
-import traceback
 from collections import deque
 from typing import Any
 from .logger import logger
@@ -34,7 +33,6 @@ class Timer:
             try:
                 cls.executor(t)
             except Exception as e:
-                traceback.print_exc()
                 logger.error("%s: %s", type(e).__name__, e)
             except KeyboardInterrupt:
                 ...
