@@ -4,17 +4,17 @@ from .operators import (
     ColoristaDeletePreset,
     ColoristaSwitchDevice,
     ColoristaSwitchPrecision,
-    ColoristaToggleNodeExpand,
 )
+from .cache_history import update_history
 from ..preference import get_pref
 from ...utils.icon import Icon
 from ...utils.common import grd
 from ...utils.node import get_comp_node_tree, scene_uses_compositor
-from .utils import node_is_expanded
+from .utils import node_panel_id, draw_layout_panel
 
 
 class ColoringPanel(bpy.types.Panel):
-    bl_idname = "OBJECT_PT_coloring_panel"
+    bl_idname = "VIEW3D_PT_colorista"
     bl_label = "Coloring Panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -23,19 +23,22 @@ class ColoringPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        prop = bpy.context.scene.colorista_prop
-        if not context.scene.colorista_prop.enable_coloring:
+        prop = context.scene.colorista_prop
+        if not prop.enable_coloring:
             col = layout.column()
             col.alert = True
             col.scale_y = 2
             col.prop(prop, "enable_coloring", icon="PLAY", toggle=True)
             return
         box = layout.box()
-        self.show_assets(box)
+        self.show_assets(box, context)
         if not scene_uses_compositor(context.scene):
             return
+        comp_tree = get_comp_node_tree(context.scene)
+        if comp_tree is None:
+            return
         nodes: list[bpy.types.Node] = []
-        for node in get_comp_node_tree(context.scene).nodes:
+        for node in comp_tree.nodes:
             if node.type in {"VIEWER", "R_LAYERS"}:
                 continue
             if not node.label:
@@ -48,41 +51,31 @@ class ColoringPanel(bpy.types.Panel):
             sockets = self.find_node_input(node)
             if len(sockets) == 0 and node.type == "GROUP":
                 continue
-            box = layout.box()
-            row = box.row()
-            expanded = node_is_expanded(node)
-            tree = get_comp_node_tree(context.scene)
-            if tree is None:
-                continue
-            op = row.operator(
-                ColoristaToggleNodeExpand.bl_idname,
-                text="",
-                icon="TRIA_DOWN" if expanded else "TRIA_RIGHT",
-                emboss=False,
-            )
-            op.node_name = node.name
-            op.tree_name = getattr(tree, "name_full", tree.name)
+            panel_id = node_panel_id(comp_tree, node)
+            header, body = draw_layout_panel(layout, panel_id, default_closed=False)
             if node.type != "GROUP":
-                row.label(text=node.name)
+                header.label(text=node.name)
             elif node.node_tree:
-                row.label(text=node.node_tree.name)
-            if not expanded:
+                header.label(text=node.node_tree.name)
+            else:
+                header.label(text=node.name)
+            if not body:
                 continue
             if bpy.app.version >= (4, 2):
-                box.separator(type="LINE")
+                body.separator(type="LINE")
             else:
-                box.separator()
-            node.draw_buttons(context, box) # Tips: 用户手动切换节点后会出现bug
-            bbox = box
+                body.separator()
+            node.draw_buttons(context, body)
+            bbox = body
             for inp in sockets:
                 if inp.name.startswith("——"):
-                    bbox = box.box()
+                    bbox = body.box()
                     row = bbox.row()
                     row.alert = True
                     row.alignment = "CENTER"
                     row.label(text=inp.name)
                     continue
-                bbox.template_node_view(get_comp_node_tree(context.scene), node, inp)
+                bbox.template_node_view(comp_tree, node, inp)
 
     def draw_header(self, context: bpy.types.Context):
         self.layout.template_icon(icon_value=Icon.reg_icon(grd() / "icons/color.png"))
@@ -90,7 +83,7 @@ class ColoringPanel(bpy.types.Panel):
     def draw_header_preset(self, context: bpy.types.Context):
         layout = self.layout.row(align=True)
         row = layout.row(align=True)
-        prop = bpy.context.scene.colorista_prop
+        prop = context.scene.colorista_prop
         render = context.scene.render
 
         row.alert = prop.enable_coloring
@@ -118,7 +111,7 @@ class ColoringPanel(bpy.types.Panel):
             row.alert = pref.force_use_cpu_render_image
             row.prop(pref, "force_use_cpu_render_image", text="", icon="GEOMETRY_SET")
         row.alert = False
-        row.popover(ColoristaHistoryPanel.bl_idname, text="", icon="RECOVER_LAST")
+        row.operator(ColoristaOpenHistory.bl_idname, text="", icon="RECOVER_LAST")
         row.operator("wm.url_open", text="", icon="URL").url = "https://github.com/AIGODLIKE/Colorista"
 
     def find_node_input(self, node) -> list[bpy.types.NodeSocket]:
@@ -133,10 +126,9 @@ class ColoringPanel(bpy.types.Panel):
             sockets.append(inp)
         return sockets
 
-    def show_assets(self, layout: bpy.types.UILayout):
+    def show_assets(self, layout: bpy.types.UILayout, context: bpy.types.Context):
+        prop = context.scene.colorista_prop
         row = layout.row(align=True)
-        sce = bpy.context.scene
-        prop = sce.colorista_prop
         row.prop(prop, "pre_dir", text="")
         row.prop(prop, "asset", text="")
         row = layout.row()
@@ -159,6 +151,17 @@ class ColoringPanel(bpy.types.Panel):
         row.operator(ColoristaDeletePreset.bl_idname, text="", icon="CANCEL")
 
 
+class ColoristaOpenHistory(bpy.types.Operator):
+    bl_idname = "wm.colorista_open_history"
+    bl_label = "Colorista History"
+    bl_description = "Colorista History"
+    bl_options = {'INTERNAL'}
+
+    def invoke(self, context: bpy.types.Context, event):
+        update_history(context)
+        return context.window_manager.popover(ColoristaHistoryPanel)
+
+
 class ColoristaHistoryPanel(bpy.types.Panel):
     bl_label = "Colorista History"
     bl_idname = "COLORISTA_PT_History"
@@ -167,16 +170,14 @@ class ColoristaHistoryPanel(bpy.types.Panel):
     bl_options = {"INSTANCED"}
 
     def draw(self, context: bpy.types.Context):
-        from .cache_history import update_history
-
-        update_history()
-        sce = bpy.context.scene
+        sce = context.scene
         layout = self.layout
         layout.template_list("COLORISTA_HISTORY_UL_UIList", "", sce, "colorista_items", sce, "colorista_items_index")
 
 
 clss = (
     ColoringPanel,
+    ColoristaOpenHistory,
     ColoristaHistoryPanel,
 )
 

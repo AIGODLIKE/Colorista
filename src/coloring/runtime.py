@@ -91,7 +91,7 @@ def activate() -> None:
 
 def deactivate(context: bpy.types.Context | None = None) -> None:
     global _active
-    from .utils import clear_compositor, clear_node_expand_cache, set_viewport_shading
+    from .utils import clear_compositor, set_viewport_shading
 
     if _active:
         from .handler import DepsgraphPostHandler, RenderHandler
@@ -104,7 +104,6 @@ def deactivate(context: bpy.types.Context | None = None) -> None:
 
     try:
         scene = (context or bpy.context).scene
-        clear_node_expand_cache()
         clear_compositor(scene)
         set_viewport_shading("DISABLED", context)
     except Exception:

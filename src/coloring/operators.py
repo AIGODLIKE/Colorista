@@ -24,6 +24,17 @@ from ...utils.node import (
 )
 
 
+def _poll_coloring_enabled(cls, context: bpy.types.Context) -> bool:
+    try:
+        if not context.scene.colorista_prop.enable_coloring:
+            cls.poll_message_set(_T("Enable coloring first"))
+            return False
+    except AttributeError:
+        cls.poll_message_set(_T("Enable coloring first"))
+        return False
+    return True
+
+
 class ColoristaSavePreset(bpy.types.Operator):
     bl_idname = "wm.colorista_save_preset"
     bl_description = "Save preset"
@@ -36,19 +47,21 @@ class ColoristaSavePreset(bpy.types.Operator):
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
         if not scene_uses_compositor(context.scene):
-            cls.poll_message_set("Compositor nodes are not enabled for this scene")
+            cls.poll_message_set(_T("Compositor nodes are not enabled for this scene"))
             return False
         return True
 
     def draw(self, context):
         layout = self.layout
-        path = self.get_preset_path()
+        path = self.get_preset_path(context)
         layout.alert = True
         layout.label(text=_T("Overwrite preset: {}?").format(path.stem), icon="QUESTION")
 
-    def get_preset_path(self):
-        asset = bpy.context.scene.colorista_prop.get_asset_path(bpy.context)
-        preset_name = bpy.context.scene.colorista_prop.preset_save_name
+    def get_preset_path(self, context: bpy.types.Context | None = None):
+        context = context or bpy.context
+        prop = context.scene.colorista_prop
+        asset = prop.get_asset_path(context)
+        preset_name = prop.preset_save_name
         preset = Path(asset).with_suffix("").joinpath(preset_name)
         if self.preset:
             preset = Path(self.preset)
@@ -56,13 +69,13 @@ class ColoristaSavePreset(bpy.types.Operator):
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
         if not context.scene.colorista_prop.get_asset_path(context):
-            self.report({'ERROR'}, "No asset selected")
+            self.report({'ERROR'}, _T("No asset selected"))
             return {"CANCELLED"}
         if not context.scene.colorista_prop.preset_save_name:
-            self.report({'ERROR'}, "Enter a preset name")
+            self.report({'ERROR'}, _T("Enter a preset name"))
             return {"CANCELLED"}
         wm = context.window_manager
-        path = self.get_preset_path()
+        path = self.get_preset_path(context)
         if path and path.exists() and self.popup:
             return wm.invoke_props_dialog(self, width=200)
         return self.execute(context)
@@ -86,7 +99,7 @@ class ColoristaSavePreset(bpy.types.Operator):
         self.copy_drivers(sf, st)
 
     def execute(self, context: bpy.types.Context):
-        path = self.get_preset_path()
+        path = self.get_preset_path(context)
         self.preset = ""
         path.parent.mkdir(parents=True, exist_ok=True)
         sce = bpy.data.scenes.new(name="AC-Coloring")
@@ -106,10 +119,10 @@ class ColoristaDeletePreset(bpy.types.Operator):
     def poll(cls, context: bpy.types.Context) -> bool:
         prop = context.scene.colorista_prop
         if not prop.get_asset_path(context):
-            cls.poll_message_set("Select an asset first")
+            cls.poll_message_set(_T("Select an asset first"))
             return False
         if prop.get_preset_path(context) == prop.PRESET_NONE_ID:
-            cls.poll_message_set("Select a preset to delete")
+            cls.poll_message_set(_T("Select a preset to delete"))
             return False
         return True
 
@@ -121,13 +134,12 @@ class ColoristaDeletePreset(bpy.types.Operator):
         layout.label(text=_T("Delete {}'s preset: {}?").format(asset, preset), icon="TRASH")
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
-        wm = bpy.context.window_manager
-        return wm.invoke_props_dialog(self, width=200)
+        return context.window_manager.invoke_props_dialog(self, width=200)
 
     def execute(self, context: bpy.types.Context):
         path = Path(context.scene.colorista_prop.get_preset_path(context))
         if not path or not path.exists():
-            self.report({'ERROR'}, "Cannot find preset")
+            self.report({'ERROR'}, _T("Cannot find preset"))
             return {"CANCELLED"}
 
         path.unlink()
@@ -139,6 +151,10 @@ class ColoristaSwitchDevice(bpy.types.Operator):
     bl_description = "Switch device"
     bl_label = "Switch device"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return _poll_coloring_enabled(cls, context)
 
     def execute(self, context):
         render = context.scene.render
@@ -154,6 +170,10 @@ class ColoristaSwitchPrecision(bpy.types.Operator):
     bl_description = "Switch precision"
     bl_label = "Switch precision"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return _poll_coloring_enabled(cls, context)
 
     def execute(self, context):
         render = context.scene.render
@@ -173,6 +193,10 @@ class CompositorNodeTreeImport(bpy.types.Operator):
     use_default: bpy.props.BoolProperty(default=False)
     preset: bpy.props.StringProperty(default="")
     no_cache: bpy.props.BoolProperty(default=False)
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return _poll_coloring_enabled(cls, context)
 
     def rsc_used(self, rsc) -> bool:
         try:
@@ -209,11 +233,11 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             return
         return new_scenes
 
-    def load_compositor_sce(self, preset):
-        ensure_comp_node_tree(bpy.context.scene)
+    def load_compositor_sce(self, preset, context: bpy.types.Context):
+        ensure_comp_node_tree(context.scene)
         data_path = Path(preset)
         if not data_path.exists():
-            return
+            return None
         try:
             sce = self._load_compositor_scene(data_path.as_posix())
         except Exception:
@@ -231,7 +255,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         except TypeError:
             pass
 
-    def load_compositor_node_tree(self, from_sces: set[bpy.types.Scene]):
+    def load_compositor_node_tree(self, from_sces: set[bpy.types.Scene], context: bpy.types.Context):
         if not from_sces:
             return
         all_scenes = list(from_sces)
@@ -240,14 +264,8 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             if ls.name == "AC-Coloring":
                 from_sce = ls
                 break
-        # 从 load_scene 复制 compositor节点树到当前场景
-        sce = bpy.context.scene
-        # 同步渲染引擎
-        # sce.render.engine = load_sce.render.engine
-        bpy.context.view_layer.update()
-        # 同步通道设置
-        # if load_sce.view_layers:
-        #     self.sync_view_layer_passs(load_sce.view_layers[0], bpy.context.view_layer)
+        sce = context.scene
+        context.view_layer.update()
         node_map = {}
         r_layer: bpy.types.CompositorNodeRLayers = None
         from_tree = get_comp_node_tree(from_sce)
@@ -255,14 +273,14 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         if bpy.app.version >= (5, 0, 0):
             if not from_tree:
                 return
-            bpy.context.scene.compositing_node_group = from_tree.copy()
-            to_tree = bpy.context.scene.compositing_node_group
+            sce.compositing_node_group = from_tree.copy()
+            to_tree = sce.compositing_node_group
             for n in to_tree.nodes:
                 if n.type == "R_LAYERS":
                     r_layer = n
             if r_layer:
                 r_layer.scene = sce
-                r_layer.layer = bpy.context.view_layer.name
+                r_layer.layer = context.view_layer.name
             self.sync_settings(sce, from_sce)
             return
         for nf in from_tree.nodes:
@@ -302,17 +320,20 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             to_tree.links.new(tsocket, fsocket)
         if r_layer:
             r_layer.scene = sce
-            r_layer.layer = bpy.context.view_layer.name
+            r_layer.layer = context.view_layer.name
         self.sync_settings(sce, from_sce)
         self.copy_drivers(from_sce, sce)
 
-    def enable_coloring_f(self, preset, context=None):
+    def enable_coloring_f(self, preset, context=None) -> bool:
         context = context or bpy.context
         sce = context.scene
+        if preset is None:
+            self.report({'ERROR'}, _T("No default preset found"))
+            return False
         preset_path = Path(preset)
         if not preset_path.exists():
-            logger.error("Preset not found: %s", preset_path)
-            return
+            self.report({'ERROR'}, _T("Preset not found: {}").format(preset_path))
+            return False
 
         pref = get_pref()
         if pref and pref.cache_current_compositor and not self.no_cache and scene_uses_compositor(sce):
@@ -324,25 +345,22 @@ class CompositorNodeTreeImport(bpy.types.Operator):
                 bpy.ops.wm.colorista_save_preset(preset=path.as_posix(), popup=False)
             except Exception as e:
                 logger.error(e)
-            update_history()
+            update_history(context)
 
-        # sce.view_settings.view_transform = "AgX"
-        # 2. 判断软件版本如果是4.2默认合成模式切换到gpu
         if (4, 2) <= bpy.app.version <= (4, 3):
             sce.render.compositor_device = "GPU"
-        # 4. 状态开启
         set_viewport_shading("ALWAYS", context)
-        ensure_comp_node_tree(bpy.context.scene)
+        ensure_comp_node_tree(sce)
         sce_tree = get_comp_node_tree(sce)
         if sce_tree and bpy.app.version < (5, 0, 0):
             sce_tree.nodes.clear()
         old_nts = set(bpy.data.node_groups)
-        load_sce = self.load_compositor_sce(preset)
+        load_sce = self.load_compositor_sce(preset, context)
         if not load_sce:
-            logger.error("Failed to load compositor from %s", preset_path)
-            return
+            self.report({'ERROR'}, _T("Failed to load compositor from {}").format(preset_path))
+            return False
         new_nts = set(bpy.data.node_groups) - old_nts
-        self.load_compositor_node_tree(load_sce)
+        self.load_compositor_node_tree(load_sce, context)
         for nt in new_nts:
             self.reset_driver_with_scene_ref(nt.animation_data, load_sce)
         for ls in load_sce:
@@ -355,11 +373,10 @@ class CompositorNodeTreeImport(bpy.types.Operator):
                 self.reload_drivers(nt.animation_data)
         from .handler import update_node_group
         from .timer import update_custom_vt
-        from .utils import clear_node_expand_cache
 
-        clear_node_expand_cache()
         update_node_group(sce)
         update_custom_vt()
+        return True
 
     def copy_drivers(self, sf: bpy.types.Scene, st: bpy.types.Scene):
         copy_node_tree_drivers(sf, st)
@@ -395,39 +412,14 @@ class CompositorNodeTreeImport(bpy.types.Operator):
         preset = prop.get_asset_path(context)
         if self.use_default:
             preset = get_default_preset_path()
+            if preset is None:
+                self.report({'ERROR'}, _T("No default preset found"))
+                return {"CANCELLED"}
         if self.preset:
             preset = Path(self.preset)
             self.preset = ""
-        self.enable_coloring_f(preset, context)
-        return {"FINISHED"}
-
-
-class ColoristaToggleNodeExpand(bpy.types.Operator):
-    bl_idname = "wm.colorista_toggle_node_expand"
-    bl_label = "Toggle Node Panel"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    node_name: bpy.props.StringProperty(default="")
-    tree_name: bpy.props.StringProperty(default="")
-
-    def execute(self, context):
-        tree = bpy.data.node_groups.get(self.tree_name)
-        if tree is None:
-            for ng in bpy.data.node_groups:
-                if getattr(ng, "name_full", ng.name) == self.tree_name:
-                    tree = ng
-                    break
-        if tree is None:
+        if not self.enable_coloring_f(preset, context):
             return {"CANCELLED"}
-        node = tree.nodes.get(self.node_name)
-        if node is None:
-            return {"CANCELLED"}
-        from .utils import toggle_node_expanded
-
-        toggle_node_expanded(node)
-        for area in context.screen.areas:
-            if area.type == "VIEW_3D":
-                area.tag_redraw()
         return {"FINISHED"}
 
 
@@ -437,7 +429,6 @@ clss = (
     ColoristaSwitchDevice,
     ColoristaSwitchPrecision,
     CompositorNodeTreeImport,
-    ColoristaToggleNodeExpand,
 )
 
 register, unregister = bpy.utils.register_classes_factory(clss)

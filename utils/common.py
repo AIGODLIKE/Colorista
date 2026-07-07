@@ -66,17 +66,18 @@ def find_first_blend(directory: Path) -> Path | None:
     return blends[0] if blends else None
 
 
-def get_default_preset_path() -> Path:
+def get_default_preset_path() -> Path | None:
     candidates = (
         get_resource_dir_locale() / "default" / "default",
         get_resource_dir() / "CN" / "default" / "default",
         get_resource_dir_locale() / "Default" / "default",
+        get_resource_dir() / "EN" / "default" / "default",
     )
     for directory in candidates:
         preset = find_first_blend(directory)
         if preset is not None:
             return preset
-    return get_resource_dir_locale() / "default" / "default" / "default.blend"
+    return None
 
 
 @lru_cache(maxsize=4)

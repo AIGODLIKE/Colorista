@@ -39,7 +39,7 @@ class ColoristaDeleteHistory(bpy.types.Operator):
             return {"CANCELLED"}
         file = Path(self.file)
         if not file.exists():
-            update_history()
+            update_history(context)
             self.report({'WARNING'}, _T("History file not found"))
             return {"FINISHED"}
         if file.is_dir():
@@ -47,7 +47,7 @@ class ColoristaDeleteHistory(bpy.types.Operator):
         if file.suffix.lower() != ".blend":
             return {"CANCELLED"}
         file.unlink()
-        update_history()
+        update_history(context)
         return {"FINISHED"}
 
 
@@ -57,10 +57,11 @@ def _iter_history_files(cache_dir: Path) -> list[Path]:
 
 
 @bpy.app.handlers.persistent
-def update_history(_=None):
+def update_history(context=None):
     try:
+        context = context or bpy.context
         cache_dir = get_user_cache_dir()
-        sce = bpy.context.scene
+        sce = context.scene
         files = _iter_history_files(cache_dir)
         pref = get_pref()
         count = pref.cache_current_cache_count if pref else 10

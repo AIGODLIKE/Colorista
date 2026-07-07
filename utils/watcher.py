@@ -20,6 +20,7 @@ class FSWatcher:
     _watcher_queue = deque()
     _running = False
     _enabled = False
+    _TIMER_INTERVAL = 0.5
 
     @classmethod
     def enable(cls) -> None:
@@ -44,8 +45,8 @@ class FSWatcher:
     @classmethod
     def unregister(cls, path):
         path = cls.to_path(path)
-        cls._watcher_path.pop(path)
-        cls._watcher_callback.pop(path)
+        cls._watcher_path.pop(path, None)
+        cls._watcher_callback.pop(path, None)
 
     @classmethod
     def _run(cls):
@@ -55,18 +56,18 @@ class FSWatcher:
             return
         cls._running = True
         import bpy
-        bpy.app.timers.register(cls._loop_timer, persistent=True)
-        bpy.app.timers.register(cls._run_ex_timer, persistent=True)
+        bpy.app.timers.register(cls._timer, persistent=True)
 
     @classmethod
-    def _run_ex_timer(cls):
+    def _timer(cls):
+        if not cls._running:
+            return None
+        cls._loop_one()
         cls._run_ex_one()
-        return 0.5
+        return cls._TIMER_INTERVAL
 
     @classmethod
     def _run_ex_one(cls):
-        if not cls._running:
-            return
         while cls._watcher_queue:
             path = cls._watcher_queue.popleft()
             if path not in cls._watcher_path:
@@ -75,14 +76,7 @@ class FSWatcher:
                 callback(path)
 
     @classmethod
-    def _loop_timer(cls):
-        cls._loop_one()
-        return 1
-
-    @classmethod
     def _loop_one(cls):
-        if not cls._running:
-            return
         for path, changed in list(cls._watcher_path.items()):
             if changed:
                 continue
@@ -101,11 +95,7 @@ class FSWatcher:
         cls._watcher_queue.clear()
         import bpy
         try:
-            bpy.app.timers.unregister(cls._loop_timer)
-        except Exception:
-            ...
-        try:
-            bpy.app.timers.unregister(cls._run_ex_timer)
+            bpy.app.timers.unregister(cls._timer)
         except Exception:
             ...
 
@@ -153,7 +143,6 @@ class FSWatcher:
         except FileNotFoundError as e:
             res_str = p.as_posix()
             logger.warning(e)
-        # 处理nas路径
         for local_drive, nas_path in cls.get_nas_mapping().items():
             if not res_str.startswith(nas_path):
                 continue
