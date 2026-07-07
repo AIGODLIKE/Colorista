@@ -5,6 +5,7 @@ import bpy
 from ...utils.common import get_resource_dir_locale, get_resource_dir
 from ...utils.icon import Icon
 from ...utils.logger import logger
+from ...utils.timer import Timer
 from ...utils.watcher import FSWatcher
 
 PROP_TCTX = "ColoristaTCTX"
@@ -20,9 +21,7 @@ def _enum_item_index(items, identifier: str) -> int:
 
 class Props(bpy.types.PropertyGroup):
     PRESET_NONE_ID = "__NONE__"
-
-    def enable_coloring_f(self):
-        bpy.ops.wm.colorista_compositor_import(use_default=True)
+    _enable_update_guard = False
 
     def disable_coloring_f(self, context: bpy.types.Context):
         from .runtime import deactivate
@@ -30,9 +29,18 @@ class Props(bpy.types.PropertyGroup):
         deactivate(context)
 
     def update_enable_coloring(self, context: bpy.types.Context):
+        if Props._enable_update_guard:
+            return
         if self.enable_coloring:
             logger.info("Coloring enabled")
-            self.enable_coloring_f()
+            result = bpy.ops.wm.colorista_compositor_import(use_default=True)
+            if "CANCELLED" in result:
+                Props._enable_update_guard = True
+                try:
+                    self.enable_coloring = False
+                finally:
+                    Props._enable_update_guard = False
+                return
             from .runtime import activate
 
             activate()
@@ -82,7 +90,16 @@ class Props(bpy.types.PropertyGroup):
             img = path.joinpath(name).with_suffix(suf)
             if img.exists():
                 return img
-        return get_resource_dir().joinpath("icons/None.png")
+        return get_resource_dir().joinpath("icons/none.png")
+
+    def _queue_asset_icon(self, icon_path: Path) -> int:
+        icon_key = icon_path.as_posix()
+        if icon_key not in Icon:
+            placeholder = get_resource_dir().joinpath("icons/none.png")
+            Icon.reg_icon(placeholder.as_posix())
+            Timer.put((Icon.reg_icon, icon_key, False, True))
+            return Icon.get_icon_id(placeholder)
+        return Icon.get_icon_id(icon_path)
 
     def asset_items(self, context):
         if not self.pre_dir:
@@ -96,8 +113,7 @@ class Props(bpy.types.PropertyGroup):
         if rdir.is_dir():
             for f in sorted(rdir.glob("*.blend"), key=lambda x: x.name):
                 icon_path = self.find_icon(f.stem, rdir)
-                Icon.reg_icon(icon_path.as_posix(), hq=True)
-                icon_id = Icon.get_icon_id(icon_path)
+                icon_id = self._queue_asset_icon(icon_path)
                 items.append((f.as_posix(), f.stem, f.stem, icon_id, len(items)))
         return self._ref_items.get(rdir, [])
 

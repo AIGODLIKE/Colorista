@@ -2,8 +2,6 @@ import bpy
 
 from ...utils.node import get_comp_node_tree
 
-_NODE_EXPAND: dict[str, bool] = {}
-
 
 def _get_window_screen(context: bpy.types.Context) -> bpy.types.Screen | None:
     window = context.window
@@ -62,24 +60,16 @@ def clear_compositor(scene: bpy.types.Scene) -> None:
     scene.use_nodes = False
 
 
-def node_expand_key(node: bpy.types.Node) -> str:
-    tree = node.id_data
-    return f"{getattr(tree, 'name_full', tree.name)}:{node.name}"
+def node_panel_id(tree: bpy.types.NodeTree, node: bpy.types.Node) -> str:
+    tree_name = getattr(tree, "name_full", tree.name)
+    return f"colorista_{tree_name}_{node.name}"
 
 
-def node_is_expanded(node: bpy.types.Node) -> bool:
-    return _NODE_EXPAND.get(node_expand_key(node), True)
-
-
-def toggle_node_expanded(node: bpy.types.Node) -> bool:
-    key = node_expand_key(node)
-    expanded = not _NODE_EXPAND.get(key, True)
-    _NODE_EXPAND[key] = expanded
-    return expanded
-
-
-def clear_node_expand_cache() -> None:
-    _NODE_EXPAND.clear()
+def draw_layout_panel(layout, panel_id: str, default_closed: bool = False):
+    try:
+        return layout.panel(idname=panel_id, default_closed=default_closed)
+    except TypeError:
+        return layout.panel(panel_id, default_closed=default_closed)
 
 
 def register():
@@ -87,4 +77,4 @@ def register():
 
 
 def unregister():
-    clear_node_expand_cache()
+    ...
