@@ -111,7 +111,7 @@ class ColoringPanel(bpy.types.Panel):
             row.alert = pref.force_use_cpu_render_image
             row.prop(pref, "force_use_cpu_render_image", text="", icon="GEOMETRY_SET")
         row.alert = False
-        row.operator(ColoristaOpenHistory.bl_idname, text="", icon="RECOVER_LAST")
+        row.popover("COLORISTA_PT_History", text="", icon="RECOVER_LAST")
         row.operator("wm.url_open", text="", icon="URL").url = "https://github.com/AIGODLIKE/Colorista"
 
     def find_node_input(self, node) -> list[bpy.types.NodeSocket]:
@@ -151,17 +151,6 @@ class ColoringPanel(bpy.types.Panel):
         row.operator(ColoristaDeletePreset.bl_idname, text="", icon="CANCEL")
 
 
-class ColoristaOpenHistory(bpy.types.Operator):
-    bl_idname = "wm.colorista_open_history"
-    bl_label = "Colorista History"
-    bl_description = "Colorista History"
-    bl_options = {'INTERNAL'}
-
-    def invoke(self, context: bpy.types.Context, event):
-        update_history(context)
-        return context.window_manager.popover(ColoristaHistoryPanel)
-
-
 class ColoristaHistoryPanel(bpy.types.Panel):
     bl_label = "Colorista History"
     bl_idname = "COLORISTA_PT_History"
@@ -170,6 +159,7 @@ class ColoristaHistoryPanel(bpy.types.Panel):
     bl_options = {"INSTANCED"}
 
     def draw(self, context: bpy.types.Context):
+        update_history(context)
         sce = context.scene
         layout = self.layout
         layout.template_list("COLORISTA_HISTORY_UL_UIList", "", sce, "colorista_items", sce, "colorista_items_index")
@@ -177,7 +167,6 @@ class ColoristaHistoryPanel(bpy.types.Panel):
 
 clss = (
     ColoringPanel,
-    ColoristaOpenHistory,
     ColoristaHistoryPanel,
 )
 
