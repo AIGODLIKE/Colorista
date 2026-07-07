@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-7-7 v1.2.1
+
+修复: Blender 5.1 历史记录 popover 报错（改用 layout.popover）
+
+---
+
 ## 2026-7-7 v1.2.0
 
 优化: 按需激活 Handler/监听；单 timer 轮询；图标与缩略图懒加载；历史记录按需刷新；视口合成按窗口独立控制
