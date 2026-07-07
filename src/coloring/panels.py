@@ -167,6 +167,9 @@ class ColoristaHistoryPanel(bpy.types.Panel):
     bl_options = {"INSTANCED"}
 
     def draw(self, context: bpy.types.Context):
+        from .cache_history import update_history
+
+        update_history()
         sce = bpy.context.scene
         layout = self.layout
         layout.template_list("COLORISTA_HISTORY_UL_UIList", "", sce, "colorista_items", sce, "colorista_items_index")
