@@ -6,20 +6,64 @@ from ..preference import get_pref
 from ...utils.logger import logger
 from ...utils.node import get_comp_node_tree
 
-# 主节点组名称
-main_node_group_name = "Basic adjustment nodes for colorists"
+
+class DepsgraphPostHandler:
+    handlers: dict[callable, None] = {}
+    _registered = False
+
+    @classmethod
+    def add(cls, handler: callable):
+        cls.handlers[handler] = None
+
+    @classmethod
+    def remove(cls, handler: callable):
+        cls.handlers.pop(handler, None)
+
+    @classmethod
+    @bpy.app.handlers.persistent
+    def update(cls, scene, deps):
+        if not scene.colorista_prop.enable_coloring:
+            return
+        for handler in cls.handlers:
+            try:
+                handler(scene)
+            except Exception:
+                logger.exception("Depsgraph handler failed")
+
+    @classmethod
+    def register(cls):
+        if cls._registered:
+            return
+        bpy.app.handlers.depsgraph_update_post.append(cls.update)
+        cls._registered = True
+
+    @classmethod
+    def unregister(cls):
+        if not cls._registered:
+            return
+        try:
+            bpy.app.handlers.depsgraph_update_post.remove(cls.update)
+        except ValueError:
+            pass
+        cls._registered = False
+        cls.handlers.clear()
+
+
+def _main_node_group_name() -> str:
+    pref = get_pref()
+    if pref and pref.main_node_group_name:
+        return pref.main_node_group_name
+    return "Basic adjustment nodes for colorists"
 
 
 def update_node_group(scene):
-    if not scene.colorista_prop.enable_coloring:
-        return
     pref = get_pref()
     verbose = pref.enable_logging if pref else False
     main_node_tree = get_comp_node_tree(scene)
     if not main_node_tree:
         return
-    main_node_group = main_node_tree.nodes.get(main_node_group_name)
-    if not main_node_group:
+    main_node_group = main_node_tree.nodes.get(_main_node_group_name())
+    if not main_node_group or not main_node_group.node_tree:
         return
     for node in main_node_group.node_tree.nodes:
         match = re.match(r"inputs\[(\d+)\]", node.name)
@@ -125,4 +169,5 @@ def register():
 
 
 def unregister():
-    pass
+    DepsgraphPostHandler.unregister()
+    RenderHandler.unregister()

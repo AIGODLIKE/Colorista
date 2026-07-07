@@ -38,13 +38,19 @@ class MetaIn(type):
 
 
 class Icon(metaclass=MetaIn):
-    PREV_DICT = PrevMgr.new()
+    PREV_DICT = None
     NONE_IMAGE = ""
     IMG_STATUS = {}
     PIX_STATUS = {}
     PATH2BPY = {}
     ENABLE_HQ_PREVIEW = True
     INSTANCE = None
+
+    @classmethod
+    def _ensure_prev(cls):
+        if cls.PREV_DICT is None:
+            cls.PREV_DICT = PrevMgr.new()
+        return cls.PREV_DICT
 
     def __init__(self) -> None:
         if Icon.NONE_IMAGE and Icon.NONE_IMAGE not in Icon:
@@ -77,7 +83,8 @@ class Icon(metaclass=MetaIn):
 
     @staticmethod
     def clear():
-        Icon.PREV_DICT.clear()
+        prev = Icon._ensure_prev()
+        prev.clear()
         Icon.IMG_STATUS.clear()
         Icon.PIX_STATUS.clear()
         Icon.PATH2BPY.clear()
@@ -88,7 +95,7 @@ class Icon(metaclass=MetaIn):
     def cleanup():
         if Icon.PREV_DICT is not None:
             PrevMgr.remove(Icon.PREV_DICT)
-        Icon.PREV_DICT = PrevMgr.new()
+        Icon.PREV_DICT = None
         Icon.IMG_STATUS.clear()
         Icon.PIX_STATUS.clear()
         Icon.PATH2BPY.clear()
@@ -131,9 +138,9 @@ class Icon(metaclass=MetaIn):
     @staticmethod
     def remove_mark(name) -> bool:
         name = FSWatcher.to_str(name)
-        Icon.IMG_STATUS.pop(name)
-        Icon.PIX_STATUS.pop(name)
-        Icon.PREV_DICT.pop(name)
+        Icon.IMG_STATUS.pop(name, None)
+        Icon.PIX_STATUS.pop(name, None)
+        Icon._ensure_prev().pop(name, None)
         return True
 
     @staticmethod
@@ -156,10 +163,11 @@ class Icon(metaclass=MetaIn):
                 Timer.put((Icon.reg_icon_hq, path))
             return Icon[path]
         else:
+            prev = Icon._ensure_prev()
             if path not in Icon:
-                Icon.PREV_DICT.load(path, path, 'IMAGE')
+                prev.load(path, path, 'IMAGE')
             if reload:
-                Timer.put(Icon.PREV_DICT[path].reload)
+                Timer.put(prev[path].reload)
             return Icon[path]
 
     @staticmethod
@@ -217,7 +225,7 @@ class Icon(metaclass=MetaIn):
             return
         if name in Icon:
             return
-        p = Icon.PREV_DICT.new(name)
+        p = Icon._ensure_prev().new(name)
         p.icon_size = (32, 32)
         p.image_size = (prev.size[0], prev.size[1])
         p.image_pixels_float[:] = prev.pixels[:]
@@ -225,9 +233,10 @@ class Icon(metaclass=MetaIn):
     @staticmethod
     def get_icon_id(name: Path):
         import bpy
-        p: bpy.types.ImagePreview = Icon.PREV_DICT.get(FSWatcher.to_str(name), None)
+        prev = Icon._ensure_prev()
+        p: bpy.types.ImagePreview = prev.get(FSWatcher.to_str(name), None)
         if not p:
-            p = Icon.PREV_DICT.get(FSWatcher.to_str(Icon.NONE_IMAGE), None)
+            p = prev.get(FSWatcher.to_str(Icon.NONE_IMAGE), None)
         return p.icon_id if p else 0
 
     @staticmethod
@@ -236,7 +245,7 @@ class Icon(metaclass=MetaIn):
         更新bpy.data.image 时一并更新(因为pixel 的hash 不变)
         """
         prev.reload()
-        p = Icon.PREV_DICT.get(name, None)
+        p = Icon._ensure_prev().get(name, None)
         if not p:
             # logger.error("No")
             return
@@ -248,7 +257,7 @@ class Icon(metaclass=MetaIn):
         return Icon.get_icon_id(name)
 
     def __contains__(self, name):
-        return FSWatcher.to_str(name) in Icon.PREV_DICT
+        return FSWatcher.to_str(name) in Icon._ensure_prev()
 
     def __class_getitem__(cls, name):
         return cls.__getitem__(cls, name)
