@@ -2,6 +2,7 @@ import bpy
 from pathlib import Path
 from .operators import CompositorNodeTreeImport
 from ...utils.common import get_user_cache_dir
+from ..i18n import _T
 from ..preference import get_pref
 from ...utils.logger import logger
 
@@ -29,17 +30,18 @@ class ColoristaDeleteHistory(bpy.types.Operator):
     bl_idname = "wm.colorista_delete_history"
     bl_description = "Delete history"
     bl_label = "Delete history"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'INTERNAL'}
 
-    file: bpy.props.StringProperty(default="")
+    file: bpy.props.StringProperty(default="", options={'HIDDEN', 'SKIP_SAVE'})
 
     def execute(self, context: bpy.types.Context):
         if not self.file:
             return {"CANCELLED"}
         file = Path(self.file)
         if not file.exists():
-            self.report({'ERROR'}, "History file not found")
-            return {"CANCELLED"}
+            update_history()
+            self.report({'WARNING'}, _T("History file not found"))
+            return {"FINISHED"}
         if file.is_dir():
             return {"CANCELLED"}
         if file.suffix.lower() != ".blend":
@@ -49,12 +51,17 @@ class ColoristaDeleteHistory(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _iter_history_files(cache_dir: Path) -> list[Path]:
+    files = [f for f in cache_dir.glob("*.blend") if f.is_file()]
+    return sorted(files, reverse=True)
+
+
 @bpy.app.handlers.persistent
 def update_history(_=None):
     try:
         cache_dir = get_user_cache_dir()
         sce = bpy.context.scene
-        files = sorted(cache_dir.glob("*.blend"), reverse=True)
+        files = _iter_history_files(cache_dir)
         pref = get_pref()
         count = pref.cache_current_cache_count if pref else 10
         sce.colorista_items.clear()
