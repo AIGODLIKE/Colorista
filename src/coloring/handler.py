@@ -87,6 +87,7 @@ def update_node_group(scene):
 
 
 class RenderHandler:
+    _STAGES = ("pre", "post", "init", "complete")
     handlers: dict[str, dict[callable, None]] = {
         "pre": {},
         "post": {},
@@ -94,61 +95,76 @@ class RenderHandler:
         "complete": {},
     }
     ctx = {}
+    _registered = False
 
     @classmethod
-    def add(self, handler: callable, stage="pre"):
-        if stage not in self.handlers:
+    def _ensure_stages(cls) -> None:
+        for stage in cls._STAGES:
+            if stage not in cls.handlers:
+                cls.handlers[stage] = {}
+
+    @classmethod
+    def add(cls, handler: callable, stage="pre"):
+        cls._ensure_stages()
+        if stage not in cls.handlers:
             raise ValueError(f"Invalid stage: {stage}")
-        self.handlers[stage][handler] = None
+        cls.handlers[stage][handler] = None
 
     @classmethod
     @bpy.app.handlers.persistent
-    def update_pre(self, scene, deps):
-        self.update_ex(scene, deps, "pre")
+    def update_pre(cls, scene, deps):
+        cls.update_ex(scene, deps, "pre")
 
     @classmethod
     @bpy.app.handlers.persistent
-    def update_init(self, scene, deps):
-        self.update_ex(scene, deps, "init")
+    def update_init(cls, scene, deps):
+        cls.update_ex(scene, deps, "init")
 
     @classmethod
     @bpy.app.handlers.persistent
-    def update_post(self, scene, deps):
-        self.update_ex(scene, deps, "post")
+    def update_post(cls, scene, deps):
+        cls.update_ex(scene, deps, "post")
 
     @classmethod
     @bpy.app.handlers.persistent
-    def update_complete(self, scene, deps):
-        self.update_ex(scene, deps, "complete")
+    def update_complete(cls, scene, deps):
+        cls.update_ex(scene, deps, "complete")
 
     @classmethod
-    def update_ex(self, scene, deps, stage):
-        for handler in self.handlers[stage]:
+    def update_ex(cls, scene, deps, stage):
+        for handler in cls.handlers[stage]:
             try:
-                handler(self, scene)
+                handler(cls, scene)
             except Exception:
                 logger.exception("Render handler failed")
 
     @classmethod
-    def register(self):
-        bpy.app.handlers.render_init.append(self.update_init)
-        bpy.app.handlers.render_pre.append(self.update_pre)
-        bpy.app.handlers.render_post.append(self.update_post)
-        bpy.app.handlers.render_complete.append(self.update_complete)
+    def register(cls):
+        if cls._registered:
+            return
+        bpy.app.handlers.render_init.append(cls.update_init)
+        bpy.app.handlers.render_pre.append(cls.update_pre)
+        bpy.app.handlers.render_post.append(cls.update_post)
+        bpy.app.handlers.render_complete.append(cls.update_complete)
+        cls._registered = True
 
     @classmethod
-    def unregister(self):
-        for handler_list, fn in (
-            (bpy.app.handlers.render_init, self.update_init),
-            (bpy.app.handlers.render_pre, self.update_pre),
-            (bpy.app.handlers.render_post, self.update_post),
-            (bpy.app.handlers.render_complete, self.update_complete),
-        ):
-            try:
-                handler_list.remove(fn)
-            except ValueError:
-                pass
-        self.handlers.clear()
+    def unregister(cls):
+        if cls._registered:
+            for handler_list, fn in (
+                (bpy.app.handlers.render_init, cls.update_init),
+                (bpy.app.handlers.render_pre, cls.update_pre),
+                (bpy.app.handlers.render_post, cls.update_post),
+                (bpy.app.handlers.render_complete, cls.update_complete),
+            ):
+                try:
+                    handler_list.remove(fn)
+                except ValueError:
+                    pass
+            cls._registered = False
+        cls._ensure_stages()
+        for stage in cls._STAGES:
+            cls.handlers[stage].clear()
 
 
 def switch_to_cpu_device(self: RenderHandler, scene: bpy.types.Scene):

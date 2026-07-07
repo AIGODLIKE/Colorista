@@ -106,7 +106,7 @@ def deactivate(context: bpy.types.Context | None = None) -> None:
         scene = (context or bpy.context).scene
         clear_node_expand_cache()
         clear_compositor(scene)
-        set_viewport_shading("DISABLED")
+        set_viewport_shading("DISABLED", context)
     except Exception:
         pass
 

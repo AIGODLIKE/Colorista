@@ -45,6 +45,10 @@ class Icon(metaclass=MetaIn):
     PATH2BPY = {}
     ENABLE_HQ_PREVIEW = True
     INSTANCE = None
+    _RELOAD_SCHEDULED: set[str] = set()
+    _RELOAD_RETRY: dict[str, int] = {}
+    _RELOAD_DELAY = 0.2
+    _RELOAD_MAX_RETRY = 3
 
     @classmethod
     def _ensure_prev(cls):
@@ -88,6 +92,8 @@ class Icon(metaclass=MetaIn):
         Icon.IMG_STATUS.clear()
         Icon.PIX_STATUS.clear()
         Icon.PATH2BPY.clear()
+        Icon._RELOAD_SCHEDULED.clear()
+        Icon._RELOAD_RETRY.clear()
         if Icon.NONE_IMAGE:
             Icon.reg_icon(Icon.NONE_IMAGE)
 
@@ -99,6 +105,8 @@ class Icon(metaclass=MetaIn):
         Icon.IMG_STATUS.clear()
         Icon.PIX_STATUS.clear()
         Icon.PATH2BPY.clear()
+        Icon._RELOAD_SCHEDULED.clear()
+        Icon._RELOAD_RETRY.clear()
         Icon.NONE_IMAGE = ""
         Icon.INSTANCE = None
 
@@ -154,21 +162,77 @@ class Icon(metaclass=MetaIn):
     @staticmethod
     def reg_icon(path, reload=False, hq=False):
         path = FSWatcher.to_str(path)
-        if not Icon.can_mark_image(path):
+        if not Icon.can_mark_image(path) and not reload:
+            Icon._ensure_valid_preview(path, hq=hq)
             return Icon[path]
         if Icon.ENABLE_HQ_PREVIEW and hq:
             try:
                 Icon.reg_icon_hq(path)
             except BaseException:
                 Timer.put((Icon.reg_icon_hq, path))
-            return Icon[path]
         else:
             prev = Icon._ensure_prev()
             if path not in Icon:
                 prev.load(path, path, 'IMAGE')
             if reload:
                 Timer.put(prev[path].reload)
-            return Icon[path]
+        Icon._ensure_valid_preview(path, hq=hq)
+        return Icon[path]
+
+    @staticmethod
+    def _is_preview_empty(preview) -> bool:
+        try:
+            w, h = preview.icon_size
+            if w <= 0 or h <= 0:
+                return True
+            pixels = preview.image_pixels_float
+            if not pixels or len(pixels) == 0:
+                return True
+            for value in pixels:
+                if value != 0.0:
+                    return False
+            return True
+        except (AttributeError, TypeError, ReferenceError):
+            return True
+
+    @staticmethod
+    def _ensure_valid_preview(path, hq=False):
+        path = FSWatcher.to_str(path)
+        if Icon._RELOAD_RETRY.get(path, 0) >= Icon._RELOAD_MAX_RETRY:
+            return
+        preview = Icon._ensure_prev().get(path)
+        icon_id = Icon.get_icon_id(path)
+        if preview and not Icon._is_preview_empty(preview) and icon_id != 0:
+            Icon._RELOAD_RETRY.pop(path, None)
+            return
+        Icon._schedule_delayed_reload(path, hq=hq)
+
+    @staticmethod
+    def _schedule_delayed_reload(path, hq=False):
+        import bpy
+
+        path = FSWatcher.to_str(path)
+        if path in Icon._RELOAD_SCHEDULED:
+            return
+        Icon._RELOAD_SCHEDULED.add(path)
+
+        def _reload():
+            Icon._RELOAD_SCHEDULED.discard(path)
+            Icon._RELOAD_RETRY[path] = Icon._RELOAD_RETRY.get(path, 0) + 1
+            Icon.remove_mark(path)
+            try:
+                Icon.reg_icon(path, reload=True, hq=hq)
+            except Exception:
+                pass
+            try:
+                for window in bpy.context.window_manager.windows:
+                    for area in window.screen.areas:
+                        area.tag_redraw()
+            except Exception:
+                pass
+            return None
+
+        bpy.app.timers.register(_reload, first_interval=Icon._RELOAD_DELAY)
 
     @staticmethod
     def reg_icon_hq(path):
