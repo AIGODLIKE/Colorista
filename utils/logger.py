@@ -4,8 +4,6 @@ from pathlib import Path
 
 NAME = __package__
 
-L = logging.WARNING
-
 FMTDICT = {
     'DEBUG': ["[36m", "DBG"],
     'INFO': ["[37m", "INF"],
@@ -24,9 +22,6 @@ def _get_logfile() -> Path:
         return Path(bpy.utils.extension_path_user(root)).joinpath("logs", "runtime.log")
     except Exception:
         return Path(__file__).resolve().parent.joinpath("logs", "runtime.log")
-
-
-LOGFILE = _get_logfile()
 
 
 class KcHandler(logging.StreamHandler):
@@ -85,54 +80,66 @@ class KcLogger(logging.Logger):
         if self.closed:
             return
         self.closed = True
-        for h in reversed(self.handlers[:]):
-            try:
-                try:
-                    h.acquire()
-                    h.flush()
-                    h.close()
-                except (OSError, ValueError):
-                    pass
-                finally:
-                    h.release()
-            except BaseException:
-                ...
-
-    def __del__(self):
-        self.close()
+        _detach_handlers(self)
 
 
-def getLogger(name="CLOG", level=logging.WARNING, fmt='[%(name)s-%(levelname)s]: %(message)s', fmt_date="%H:%M:%S") -> KcLogger:
+_handlers_attached = False
+
+
+def _attach_handlers(log: KcLogger) -> None:
+    global _handlers_attached
     fmter = logging.Formatter('[%(levelname)s]:%(filename)s>%(lineno)s: %(message)s')
     logfile = _get_logfile()
-    if not logfile.parent.exists():
-        logfile.parent.mkdir(parents=True, exist_ok=True)
+    logfile.parent.mkdir(parents=True, exist_ok=True)
     dfh = handlers.TimedRotatingFileHandler(filename=logfile, when='D', backupCount=2)
-    dfh.setLevel(logging.CRITICAL + 1)
     dfh.setFormatter(fmter)
-    filter = KcFilter()
-    fmter = logging.Formatter(fmt, fmt_date)
+    kc_filter = KcFilter()
     ch = KcHandler()
-    ch.setLevel(level)
-    ch.setFormatter(fmter)
-    ch.addFilter(filter)
+    ch.setFormatter(logging.Formatter('[%(name)s-%(levelname)s]: %(message)s', "%H:%M:%S"))
+    ch.addFilter(kc_filter)
+    for handler in log.handlers[:]:
+        log.removeHandler(handler)
+        try:
+            handler.close()
+        except (OSError, ValueError):
+            pass
+    log.addHandler(dfh)
+    log.addHandler(ch)
+    _handlers_attached = True
 
-    l = KcLogger(name)
-    l.setLevel(level)
-    if not l.hasHandlers():
-        l.addHandler(dfh)
-        l.addHandler(ch)
-    return l
+
+def _detach_handlers(log: KcLogger) -> None:
+    global _handlers_attached
+    for handler in log.handlers[:]:
+        try:
+            handler.close()
+        except (OSError, ValueError):
+            pass
+        log.removeHandler(handler)
+    log.addHandler(logging.NullHandler())
+    log.setLevel(logging.CRITICAL + 1)
+    _handlers_attached = False
 
 
 def configure_logger(enabled: bool = False) -> None:
-    level = logging.DEBUG if enabled else logging.WARNING
-    logger.setLevel(level)
-    for handler in logger.handlers:
-        if isinstance(handler, handlers.TimedRotatingFileHandler):
-            handler.setLevel(logging.DEBUG if enabled else logging.CRITICAL + 1)
-        elif isinstance(handler, KcHandler):
-            handler.setLevel(level)
+    log = logger
+    log.closed = False
+    if enabled:
+        if not _handlers_attached:
+            _attach_handlers(log)
+        log.setLevel(logging.DEBUG)
+        for handler in log.handlers:
+            if isinstance(handler, handlers.TimedRotatingFileHandler):
+                handler.setLevel(logging.DEBUG)
+            elif isinstance(handler, KcHandler):
+                handler.setLevel(logging.DEBUG)
+    else:
+        if _handlers_attached:
+            _detach_handlers(log)
+        else:
+            log.setLevel(logging.CRITICAL + 1)
 
 
-logger = getLogger(NAME, L)
+logger = KcLogger(NAME)
+logger.addHandler(logging.NullHandler())
+logger.setLevel(logging.CRITICAL + 1)

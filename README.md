@@ -24,11 +24,11 @@ A convenient color grading add-on designed for colorists, allowing for one click
 
 · Support both Chinese and English
 
-### Correction Series
+### Observation Module
 
 After the color adjustment is completed, turn on this parameter. When the value is 0.5, the left side is the original image and the right side is the color adjusted image. If you want the left side to be the finished color adjustment and the right side to be the original image, you can manually enter a negative number, such as 0.5
 
-
+---
 
 ### Correction Series
 

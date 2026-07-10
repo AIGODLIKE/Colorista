@@ -1,69 +1,6 @@
 import bpy
-from functools import partial
 
-from ...utils.logger import logger
 from ...utils.node import get_comp_node_tree
-
-
-class UpdateTimer1s:
-    timers: dict[callable, None] = {}
-    _prun = None
-    _registered = False
-
-    @classmethod
-    def add(cls, timer):
-        cls.timers[timer] = None
-
-    @classmethod
-    def remove(cls, timer):
-        cls.timers.pop(timer, None)
-
-    @classmethod
-    def _run_ex(cls):
-        for timer in cls.timers:
-            try:
-                timer()
-            except Exception:
-                logger.exception("Timer callback failed")
-
-    @classmethod
-    def _run(cls,):
-        try:
-            cls._run_ex()
-        except Exception:
-            logger.exception("UpdateTimer1s failed")
-        return 1
-
-    @classmethod
-    def register(cls):
-        if cls._registered:
-            return
-        cls._prun = partial(cls._run)
-        bpy.app.timers.register(cls._prun, first_interval=1, persistent=True)
-        cls._registered = True
-
-    @classmethod
-    def unregister(cls):
-        if cls._registered and cls._prun is not None:
-            try:
-                bpy.app.timers.unregister(cls._prun)
-            except Exception:
-                pass
-        cls._registered = False
-        cls._prun = None
-        cls.timers.clear()
-
-
-def update_device():
-    if not bpy.context.scene.colorista_prop.enable_coloring:
-        return
-    if bpy.app.version >= (4, 4) or bpy.app.version < (4, 3):
-        return
-    render = bpy.context.scene.render
-    if render.compositor_device != "GPU":
-        render.compositor_device = "GPU"
-        logger.debug("Changed compositor device to GPU")
-
 
 VTC_NAME = "colorista-Color Space"
 
@@ -113,4 +50,4 @@ def register():
 
 
 def unregister():
-    UpdateTimer1s.unregister()
+    pass
