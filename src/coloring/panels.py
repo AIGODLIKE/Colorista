@@ -2,6 +2,7 @@ import bpy
 from .operators import (
     ColoristaSavePreset,
     ColoristaDeletePreset,
+    ColoristaSwitchPreset,
     ColoristaSwitchDevice,
     ColoristaSwitchPrecision,
 )
@@ -141,10 +142,11 @@ class ColoringPanel(bpy.types.Panel):
         sub.template_icon_view(prop, "asset", show_labels=True, scale_popup=5)
         row.prop(prop, "next_asset", text="", icon="TRIA_RIGHT")
         row = layout.row(align=True)
-        row.prop(prop, "last_preset", text="", icon="TRIA_LEFT")
+        op = row.operator(ColoristaSwitchPreset.bl_idname, text="", icon="TRIA_LEFT")
+        op.direction = "PREV"
         row.prop(prop, "preset", text="")
-        row.prop(prop, "next_preset", text="", icon="TRIA_RIGHT")
-
+        op = row.operator(ColoristaSwitchPreset.bl_idname, text="", icon="TRIA_RIGHT")
+        op.direction = "NEXT"
         row = layout.row(align=True)
         row.prop(prop, "preset_save_name")
         row.operator(ColoristaSavePreset.bl_idname, text="", icon="IMPORT")

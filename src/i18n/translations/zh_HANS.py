@@ -46,4 +46,7 @@ translations = (
     ("No default preset found", "未找到默认预设"),
     ("Preset not found: {}", "找不到预设: {}"),
     ("Failed to load compositor from {}", "加载合成器失败: {}"),
+    ("Only one preset available", "当前只有一个预设，无法切换"),
+    ("Already on this preset", "已是当前预设"),
+    ("Switch preset", "切换预设"),
 )

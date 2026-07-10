@@ -110,8 +110,10 @@ def deactivate(context: bpy.types.Context | None = None) -> None:
         pass
 
     from ...utils.timer import Timer
+    from .state import clear_loaded_preset
 
     Timer.unreg()
+    clear_loaded_preset()
 
 
 def register():
