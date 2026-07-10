@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-7-10 v1.2.2
+
+修复: zip 安装后找不到默认预设（default.blend 路径解析）；预设列表无图标；开启调色失败时 RuntimeError 未捕获导致崩溃
+
+---
+
 ## 2026-7-7 v1.2.1
 
 修复: Blender 5.1 历史记录 popover 报错（改用 layout.popover）

@@ -8,7 +8,7 @@ from .operators import (
 from .cache_history import update_history
 from ..preference import get_pref
 from ...utils.icon import Icon
-from ...utils.common import grd
+from ...utils.common import get_icons_dir
 from ...utils.node import get_comp_node_tree, scene_uses_compositor
 from .utils import node_panel_id, draw_layout_panel
 
@@ -78,7 +78,7 @@ class ColoringPanel(bpy.types.Panel):
                 bbox.template_node_view(comp_tree, node, inp)
 
     def draw_header(self, context: bpy.types.Context):
-        self.layout.template_icon(icon_value=Icon.reg_icon(grd() / "icons/color.png"))
+        self.layout.template_icon(icon_value=Icon.reg_icon(get_icons_dir().joinpath("color.png")))
 
     def draw_header_preset(self, context: bpy.types.Context):
         layout = self.layout.row(align=True)
@@ -92,13 +92,13 @@ class ColoringPanel(bpy.types.Panel):
         if (4, 2) <= bpy.app.version:
             auto = render.compositor_precision == "AUTO"
             row.alert = not auto
-            ipath = grd() / "icons"
-            icon = Icon.reg_icon(ipath / "precision50.png") if auto else Icon.reg_icon(ipath / "precision100.png")
+            ipath = get_icons_dir()
+            icon = Icon.reg_icon(ipath.joinpath("precision50.png")) if auto else Icon.reg_icon(ipath.joinpath("precision100.png"))
             row.operator(ColoristaSwitchPrecision.bl_idname, icon_value=icon, text="")
 
             gpu = render.compositor_device == "GPU"
             row.alert = gpu
-            icon = Icon.reg_icon(ipath / "gpu.png") if gpu else Icon.reg_icon(ipath / "cpu.png")
+            icon = Icon.reg_icon(ipath.joinpath("gpu.png")) if gpu else Icon.reg_icon(ipath.joinpath("cpu.png"))
             row.operator(ColoristaSwitchDevice.bl_idname, icon_value=icon, text="")
 
             row.alert = False

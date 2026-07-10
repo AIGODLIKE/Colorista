@@ -340,7 +340,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             from .cache_history import update_history
 
             name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-            path = get_user_cache_dir() / f"{name}.blend"
+            path = get_user_cache_dir().joinpath(f"{name}.blend")
             try:
                 bpy.ops.wm.colorista_save_preset(preset=path.as_posix(), popup=False)
             except Exception as e:
