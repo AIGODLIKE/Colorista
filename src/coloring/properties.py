@@ -2,7 +2,7 @@ from pathlib import Path
 
 import bpy
 
-from ...utils.common import get_resource_dir_locale, get_resource_dir
+from ...utils.common import get_resource_dir_locale, get_resource_dir, get_none_icon_path, get_asset_preset_dir
 from ...utils.icon import Icon
 from ...utils.logger import logger
 from ...utils.timer import Timer
@@ -33,7 +33,10 @@ class Props(bpy.types.PropertyGroup):
             return
         if self.enable_coloring:
             logger.info("Coloring enabled")
-            result = bpy.ops.wm.colorista_compositor_import(use_default=True)
+            try:
+                result = bpy.ops.wm.colorista_compositor_import(use_default=True)
+            except RuntimeError:
+                result = {"CANCELLED"}
             if "CANCELLED" in result:
                 Props._enable_update_guard = True
                 try:
@@ -90,12 +93,12 @@ class Props(bpy.types.PropertyGroup):
             img = path.joinpath(name).with_suffix(suf)
             if img.exists():
                 return img
-        return get_resource_dir().joinpath("icons/none.png")
+        return get_none_icon_path()
 
     def _queue_asset_icon(self, icon_path: Path) -> int:
         icon_key = icon_path.as_posix()
         if icon_key not in Icon:
-            placeholder = get_resource_dir().joinpath("icons/none.png")
+            placeholder = get_none_icon_path()
             Icon.reg_icon(placeholder.as_posix())
             Timer.put((Icon.reg_icon, icon_key, False, True))
             return Icon.get_icon_id(placeholder)
@@ -128,7 +131,10 @@ class Props(bpy.types.PropertyGroup):
     def update_asset(self, context):
         if not self.enable_coloring:
             return
-        bpy.ops.wm.colorista_compositor_import()
+        try:
+            bpy.ops.wm.colorista_compositor_import()
+        except RuntimeError:
+            pass
 
     asset: bpy.props.EnumProperty(name="Asset",
                                   items=asset_items,
@@ -171,18 +177,25 @@ class Props(bpy.types.PropertyGroup):
         asset_path = self.get_asset_path(context)
         if not asset_path:
             return [(self.PRESET_NONE_ID, "None", "No preset available", 0)]
-        rdir = Path(asset_path).with_suffix("")
-        FSWatcher.register(rdir)
-        if not FSWatcher.consume_change(rdir) and rdir in self._ref_items:
-            return self._ref_items.get(rdir, [])
+        asset = Path(asset_path)
+        preset_dir = get_asset_preset_dir(asset)
+        FSWatcher.register(preset_dir)
+        if not FSWatcher.consume_change(preset_dir) and preset_dir in self._ref_items:
+            return self._ref_items.get(preset_dir, [])
         items = []
-        self._ref_items[rdir] = items
-        if rdir.is_dir():
-            for file in sorted(rdir.glob("*.blend"), key=lambda x: x.name):
-                items.append((file.as_posix(), file.stem, file.stem, len(items)))
+        self._ref_items[preset_dir] = items
+        if preset_dir.is_dir():
+            for file in sorted(preset_dir.glob("*.blend"), key=lambda x: x.name):
+                icon_path = self.find_icon(file.stem, preset_dir)
+                icon_id = self._queue_asset_icon(icon_path)
+                items.append((file.as_posix(), file.stem, file.stem, icon_id, len(items)))
+        elif asset.is_file() and asset.suffix.lower() == ".blend":
+            icon_path = self.find_icon(asset.stem, asset.parent)
+            icon_id = self._queue_asset_icon(icon_path)
+            items.append((asset.as_posix(), asset.stem, asset.stem, icon_id, 0))
         if not items:
             items.append((self.PRESET_NONE_ID, "None", "No preset available", 0))
-        return self._ref_items.get(rdir, [])
+        return self._ref_items.get(preset_dir, [])
 
     def get_preset_path(self, context) -> str:
         items = self.get_presets(context)
@@ -197,7 +210,10 @@ class Props(bpy.types.PropertyGroup):
             return
         if not self.enable_coloring:
             return
-        bpy.ops.wm.colorista_compositor_import(preset=self.preset)
+        try:
+            bpy.ops.wm.colorista_compositor_import(preset=self.preset)
+        except RuntimeError:
+            pass
 
     preset: bpy.props.EnumProperty(name="Preset",
                                    items=get_presets,

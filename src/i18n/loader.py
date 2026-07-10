@@ -14,7 +14,7 @@ def compile_translation(translations: tuple[tuple[str, str]]):
 
 
 def load_translations():
-    translations_dir = Path(__file__).parent / "translations"
+    translations_dir = Path(__file__).resolve().parent.joinpath("translations")
     translations_dict = {}
 
     for translation_file in translations_dir.glob("*.py"):

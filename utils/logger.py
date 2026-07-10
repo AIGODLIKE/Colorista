@@ -21,9 +21,9 @@ def _get_logfile() -> Path:
         import bpy
         parts = __package__.rsplit(".", 1)
         root = parts[0] if parts else __package__
-        return Path(bpy.utils.extension_path_user(root)) / "logs" / "runtime.log"
+        return Path(bpy.utils.extension_path_user(root)).joinpath("logs", "runtime.log")
     except Exception:
-        return Path(__file__).parent / "logs" / "runtime.log"
+        return Path(__file__).resolve().parent.joinpath("logs", "runtime.log")
 
 
 LOGFILE = _get_logfile()
