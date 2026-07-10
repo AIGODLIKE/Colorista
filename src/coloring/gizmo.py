@@ -4,15 +4,6 @@ from .utils import toggle_viewport_shading
 from ..preference import get_pref
 
 
-def calc_pixel_size():
-    context = bpy.context
-    dpi = context.preferences.system.dpi
-    ui_line_width = context.preferences.system.ui_line_width
-    pixelsize = max(1, int(dpi / 64))
-    pixelsize = max(1, pixelsize + ui_line_width)
-    return pixelsize
-
-
 def calc_widget_unit():
     context = bpy.context
     pixel_size = bpy.context.preferences.system.pixel_size
@@ -21,14 +12,78 @@ def calc_widget_unit():
     return widget_unit
 
 
-def calc_icon_offset_from_axis():
-    context = bpy.context
+# Matches Blender view3d_gizmo_navigate.cc
+GIZMO_OFFSET = 10.0
+GIZMO_MINI_SIZE = 28.0
+GIZMO_MINI_OFFSET = 2.0
+
+
+def _visible_rect(context: bpy.types.Context):
+    """Approximate ED_region_visible_rect for region-overlap layouts."""
+    region = context.region
+    xmin, ymin = 0.0, 0.0
+    xmax = float(region.width)
+    ymax = float(region.height)
+    if not context.preferences.system.use_region_overlap:
+        return xmin, ymin, xmax, ymax
+    area = context.area
+    if area is None:
+        return xmin, ymin, xmax, ymax
+    for r in area.regions:
+        if r.width <= 0 or r.height <= 0:
+            continue
+        if r.type == "UI":
+            xmax = min(xmax, float(r.x - region.x))
+        elif r.type in {"HEADER", "TOOL_HEADER"}:
+            local_y = float(r.y - region.y)
+            if local_y + r.height >= region.height - 2:
+                ymax = min(ymax, local_y)
+        elif r.type == "FOOTER":
+            local_y = float(r.y - region.y)
+            if local_y <= 2:
+                ymin = max(ymin, local_y + r.height)
+    return xmin, ymin, xmax, ymax
+
+
+def _icon_offset_from_axis(context: bpy.types.Context, icon_offset_mini: float) -> float:
+    """Scaled pixel offset below the mini-axis / rotate gizmo (Blender 5.x)."""
     view_pref = context.preferences.view
-    pixel_size = context.preferences.system.pixel_size
     ui_scale = context.preferences.system.ui_scale
-    widget_unit = calc_widget_unit()
-    offset = (widget_unit * 2.5) + (view_pref.mini_axis_size * pixel_size * 2)
-    return offset / ui_scale
+    show_rotate = view_pref.mini_axis_type == "GIZMO"
+    icon_offset = ui_scale * (GIZMO_OFFSET + (
+        view_pref.gizmo_size_navigate_v3d / 2.0 if show_rotate else 0.0
+    ))
+
+    if view_pref.mini_axis_type == "GIZMO":
+        return icon_offset * 2.2
+    if view_pref.mini_axis_type == "MINIMAL":
+        # (UI_UNIT_X * 2.0) + (rvisize * UI_SCALE_FAC * 1.6)
+        return (calc_widget_unit() * 2.0) + (view_pref.mini_axis_size * ui_scale * 1.6)
+    return icon_offset_mini * 0.75
+
+
+def _navigate_button_slots(context: bpy.types.Context) -> int:
+    """How many mini navigate buttons Blender currently shows."""
+    view_pref = context.preferences.view
+    space = context.space_data
+    if not view_pref.show_navigate_ui:
+        return 0
+    if space is None or not getattr(space, "show_gizmo", True):
+        return 0
+    if not getattr(space, "show_gizmo_navigate", True):
+        return 0
+
+    rv3d = context.region_data
+    slots = 0
+    # zoom / pan / camera — same order as view3d_gizmo_navigate.cc
+    slots += 1  # zoom
+    slots += 1  # pan
+    slots += 1  # camera
+    if rv3d is not None and getattr(rv3d, "view_perspective", None) != "CAMERA":
+        slots += 1  # persp / ortho
+    elif rv3d is not None and getattr(rv3d, "view_perspective", None) == "CAMERA":
+        slots += 1  # camera lock
+    return slots
 
 
 class ColoristaGzOps(bpy.types.Operator):
@@ -70,52 +125,20 @@ class ColoristaGizmos(bpy.types.GizmoGroup):
             return context.region_data == context.space_data.region_quadviews[-1]
         return True
 
-    def get_n_panel_width(self, context: bpy.types.Context):
-        for region in context.area.regions:
-            if region.type == "UI":
-                return region.width
-        return 0
-
-    def get_herder_height(self, context: bpy.types.Context):
-        for region in context.area.regions:
-            if region.type == "HEADER":
-                return region.height
-        return 0
-
-    def get_navitation_height(self, context: bpy.types.Context):
-        # 计算顶部控件高度
-        ui_scale = context.preferences.system.ui_scale
-        h = 0
-        icon_offset_mini = 28 + 2
-        icon_offset_from_axis = 0
-        view_pref = context.preferences.view
-        icon_offset = view_pref.gizmo_size_navigate_v3d / 2.0 + 10.0
-        if view_pref.mini_axis_type == "MINIMAL":
-            icon_offset_from_axis = calc_icon_offset_from_axis()
-        elif view_pref.mini_axis_type == "GIZMO":
-            icon_offset_from_axis = icon_offset * 2.1
-        else:
-            icon_offset_from_axis = icon_offset_mini * 0.75
-
-        h = icon_offset_from_axis
-        # 计算按钮控件高度: 当显示gizmo控件 且 显示漫游控件ui
-        if bpy.context.space_data.show_gizmo_navigate and view_pref.show_navigate_ui:
-            h += icon_offset_mini * 4
-        pref = get_pref()
-        h += icon_offset_mini * (pref.gizmo_offset if pref else 0)
-        return h * ui_scale
-
     def draw_prepare(self, context: bpy.types.Context):
         ui_scale = context.preferences.system.ui_scale
-        region = context.region
+        icon_offset_mini = (GIZMO_MINI_SIZE + GIZMO_MINI_OFFSET) * ui_scale
+        _xmin, _ymin, xmax, ymax = _visible_rect(context)
 
-        x = region.width - (28 + 2) * 0.75 * ui_scale
-        y = region.height
+        icon_offset_from_axis = _icon_offset_from_axis(context, icon_offset_mini)
+        # Next free slot under Blender's navigate buttons (+1 gap to avoid overlap)
+        slot = _navigate_button_slots(context) + 1
+        pref = get_pref()
+        if pref:
+            slot += pref.gizmo_offset
 
-        if context.preferences.system.use_region_overlap:
-            x -= self.get_n_panel_width(context)
-            y -= self.get_herder_height(context) * 2
-        y -= self.get_navitation_height(context)
+        x = round(xmax - icon_offset_mini * 0.75)
+        y = round(ymax - icon_offset_from_axis - icon_offset_mini * slot)
         self.gz.matrix_basis[0][3] = x
         self.gz.matrix_basis[1][3] = y
 

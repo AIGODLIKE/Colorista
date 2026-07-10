@@ -4,7 +4,7 @@ from pathlib import Path
 
 from ..i18n import _T
 from ..preference import get_pref
-from .state import loaded_node_groups
+from .state import loaded_node_groups, last_loaded_preset, preset_key, set_loaded_preset
 from .utils import set_viewport_shading
 from ...utils.common import (
     get_default_preset_path,
@@ -32,6 +32,9 @@ class CompositorImportHelper:
     def report(self, type_set, message: str) -> None:
         if self._reporter is not None:
             self._reporter(type_set, message)
+            return
+        if "INFO" in type_set:
+            logger.info("%s", message)
         else:
             logger.error("%s", message)
 
@@ -202,11 +205,15 @@ class CompositorImportHelper:
         for ls in load_sce:
             bpy.data.scenes.remove(ls)
         logger.info(_T("Load Compositor: {}").format(preset))
-        if sce_tree is not None:
-            new_nts.add(sce_tree)
-        for nt in new_nts:
-            if nt is not None:
-                self.reload_drivers(nt.animation_data)
+        current_tree = get_comp_node_tree(sce)
+        if current_tree is not None:
+            new_nts.add(current_tree)
+        for nt in list(new_nts):
+            try:
+                if nt is not None:
+                    self.reload_drivers(nt.animation_data)
+            except ReferenceError:
+                continue
         from .handler import update_node_group
         from .timer import update_custom_vt
 
@@ -250,6 +257,7 @@ def import_compositor(
     preset: str | Path | None = None,
     use_default: bool = False,
     no_cache: bool = False,
+    force: bool = False,
     operator=None,
 ) -> bool:
     reporter = operator.report if operator is not None else None
@@ -273,7 +281,17 @@ def import_compositor(
     if not preset_path.exists():
         helper.report({'ERROR'}, _T("Preset not found: {}").format(preset_path))
         return False
-    return helper.enable_coloring_f(preset_path, context)
+
+    key = preset_key(preset_path)
+    # use_default / force always reload; otherwise skip duplicate path (avoids appending nodes)
+    if not force and not use_default and last_loaded_preset == key:
+        helper.report({'INFO'}, _T("Already on this preset"))
+        return True
+
+    if not helper.enable_coloring_f(preset_path, context):
+        return False
+    set_loaded_preset(preset_path)
+    return True
 
 
 def _poll_coloring_enabled(cls, context: bpy.types.Context) -> bool:
@@ -436,6 +454,46 @@ class ColoristaSwitchPrecision(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class ColoristaSwitchPreset(bpy.types.Operator):
+    bl_idname = "wm.colorista_switch_preset"
+    bl_description = "Switch preset"
+    bl_label = "Switch preset"
+    bl_options = {'INTERNAL'}
+
+    direction: bpy.props.EnumProperty(
+        items=(
+            ("PREV", "Previous", "Previous preset"),
+            ("NEXT", "Next", "Next preset"),
+        ),
+        default="NEXT",
+    )
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return _poll_coloring_enabled(cls, context)
+
+    def execute(self, context: bpy.types.Context):
+        prop = context.scene.colorista_prop
+        items = [item for item in prop.get_presets(context) if item[0] != prop.PRESET_NONE_ID]
+        if len(items) <= 1:
+            self.report({'INFO'}, _T("Only one preset available"))
+            return {"CANCELLED"}
+
+        step = -1 if self.direction == "PREV" else 1
+        pos = 0
+        for index, item in enumerate(items):
+            if item[0] == prop.preset:
+                pos = index
+                break
+        new_preset = items[(pos + step) % len(items)][0]
+        if preset_key(new_preset) == preset_key(prop.preset):
+            self.report({'INFO'}, _T("Only one preset available"))
+            return {"CANCELLED"}
+
+        prop.preset = new_preset
+        return {"FINISHED"}
+
+
 class CompositorNodeTreeImport(bpy.types.Operator):
     bl_idname = "wm.colorista_compositor_import"
     bl_description = "Import a node tree"
@@ -457,6 +515,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
             preset=preset,
             use_default=self.use_default,
             no_cache=self.no_cache,
+            force=bool(self.preset),
             operator=self,
         ):
             self.preset = ""
@@ -467,6 +526,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
 clss = (
     ColoristaSavePreset,
     ColoristaDeletePreset,
+    ColoristaSwitchPreset,
     ColoristaSwitchDevice,
     ColoristaSwitchPrecision,
     CompositorNodeTreeImport,

@@ -216,38 +216,6 @@ class Props(bpy.types.PropertyGroup):
                                    translation_context=PROP_TCTX,
                                    )
 
-    def update_last_preset(self, context):
-        if not self.last_preset:
-            return
-        self.last_preset = False
-        items = self.get_presets(context)
-        if not items:
-            return
-        pos = _enum_item_index(items, self.preset)
-        self.preset = items[(pos - 1) % len(items)][0]
-
-    last_preset: bpy.props.BoolProperty(default=False,
-                                        name="Last Preset",
-                                        update=update_last_preset,
-                                        translation_context=PROP_TCTX,
-                                        )
-
-    def update_next_preset(self, context):
-        if not self.next_preset:
-            return
-        self.next_preset = False
-        items = self.get_presets(context)
-        if not items:
-            return
-        pos = _enum_item_index(items, self.preset)
-        self.preset = items[(pos + 1) % len(items)][0]
-
-    next_preset: bpy.props.BoolProperty(default=False,
-                                        name="Next Preset",
-                                        update=update_next_preset,
-                                        translation_context=PROP_TCTX,
-                                        )
-
     preset_save_name: bpy.props.StringProperty(name="Save Name",
                                                default="",
                                                translation_context=PROP_TCTX,
