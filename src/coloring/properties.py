@@ -33,19 +33,16 @@ class Props(bpy.types.PropertyGroup):
             return
         if self.enable_coloring:
             logger.info("Coloring enabled")
-            try:
-                result = bpy.ops.wm.colorista_compositor_import(use_default=True)
-            except RuntimeError:
-                result = {"CANCELLED"}
-            if "CANCELLED" in result:
+            from .operators import import_compositor
+            from .runtime import activate
+
+            if not import_compositor(context, use_default=True):
                 Props._enable_update_guard = True
                 try:
                     self.enable_coloring = False
                 finally:
                     Props._enable_update_guard = False
                 return
-            from .runtime import activate
-
             activate()
         else:
             logger.info("Coloring disabled")
@@ -131,10 +128,9 @@ class Props(bpy.types.PropertyGroup):
     def update_asset(self, context):
         if not self.enable_coloring:
             return
-        try:
-            bpy.ops.wm.colorista_compositor_import()
-        except RuntimeError:
-            pass
+        from .operators import import_compositor
+
+        import_compositor(context)
 
     asset: bpy.props.EnumProperty(name="Asset",
                                   items=asset_items,
@@ -210,10 +206,9 @@ class Props(bpy.types.PropertyGroup):
             return
         if not self.enable_coloring:
             return
-        try:
-            bpy.ops.wm.colorista_compositor_import(preset=self.preset)
-        except RuntimeError:
-            pass
+        from .operators import import_compositor
+
+        import_compositor(context, preset=self.preset)
 
     preset: bpy.props.EnumProperty(name="Preset",
                                    items=get_presets,

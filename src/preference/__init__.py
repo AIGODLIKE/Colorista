@@ -88,11 +88,6 @@ class Preferences(bpy.types.AddonPreferences):
 
 def register():
     bpy.utils.register_class(Preferences)
-    try:
-        from ...utils.logger import configure_logger
-        configure_logger(bpy.context.preferences.addons[get_package()].preferences.enable_logging)
-    except Exception:
-        pass
 
 
 def unregister():
