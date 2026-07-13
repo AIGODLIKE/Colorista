@@ -11,7 +11,12 @@ from ..preference import get_pref
 from ...utils.icon import Icon
 from ...utils.common import get_icons_dir
 from ...utils.node import get_comp_node_tree, scene_uses_compositor
-from .utils import node_panel_id, draw_layout_panel
+from .utils import (
+    draw_layout_panel,
+    find_ui_node_inputs,
+    iter_ui_coloring_nodes,
+    node_panel_id,
+)
 
 
 class ColoringPanel(bpy.types.Panel):
@@ -38,20 +43,10 @@ class ColoringPanel(bpy.types.Panel):
         comp_tree = get_comp_node_tree(context.scene)
         if comp_tree is None:
             return
-        nodes: list[bpy.types.Node] = []
-        for node in comp_tree.nodes:
-            if node.type in {"VIEWER", "R_LAYERS"}:
-                continue
-            if not node.label:
-                continue
-            nodes.append(node)
-        nodes.sort(key=lambda x: x.label)
-        for node in nodes:
+        for node in iter_ui_coloring_nodes(comp_tree):
             if len(node.inputs) == 0:
                 continue
-            sockets = self.find_node_input(node)
-            if len(sockets) == 0 and node.type == "GROUP":
-                continue
+            sockets = find_ui_node_inputs(node)
             panel_id = node_panel_id(comp_tree, node)
             header, body = draw_layout_panel(layout, panel_id, default_closed=False)
             if node.type != "GROUP":
@@ -115,18 +110,6 @@ class ColoringPanel(bpy.types.Panel):
         row.popover("COLORISTA_PT_History", text="", icon="RECOVER_LAST")
         row.operator("wm.url_open", text="", icon="URL").url = "https://github.com/AIGODLIKE/Colorista"
 
-    def find_node_input(self, node) -> list[bpy.types.NodeSocket]:
-        sockets = []
-        for inp in node.inputs:
-            if inp.is_linked:
-                continue
-            if inp.enabled is False or inp.hide:
-                continue
-            if inp.type == "RGBA" and inp.hide_value:
-                continue
-            sockets.append(inp)
-        return sockets
-
     def show_assets(self, layout: bpy.types.UILayout, context: bpy.types.Context):
         prop = context.scene.colorista_prop
         row = layout.row(align=True)
@@ -162,9 +145,16 @@ class ColoristaHistoryPanel(bpy.types.Panel):
 
     def draw(self, context: bpy.types.Context):
         update_history(context)
-        sce = context.scene
+        prop = context.scene.colorista_prop
         layout = self.layout
-        layout.template_list("COLORISTA_HISTORY_UL_UIList", "", sce, "colorista_items", sce, "colorista_items_index")
+        layout.template_list(
+            "COLORISTA_HISTORY_UL_UIList",
+            "",
+            prop,
+            "history_items",
+            prop,
+            "history_items_index",
+        )
 
 
 clss = (

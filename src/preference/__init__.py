@@ -71,7 +71,24 @@ class Preferences(bpy.types.AddonPreferences):
                                            update=update_enable_logging,
                                            translation_context=PROP_TCTX)
 
+    use_custom_presets_path: bpy.props.BoolProperty(
+        name="Use custom presets folder",
+        description="Save user presets to a custom folder instead of the default",
+        default=False,
+        translation_context=PROP_TCTX,
+    )
+
+    presets_path: bpy.props.StringProperty(
+        name="Custom presets folder",
+        description="Folder for user-saved presets when custom path is enabled",
+        subtype="DIR_PATH",
+        default="",
+        translation_context=PROP_TCTX,
+    )
+
     def draw(self, context):
+        from ...utils.common import get_default_user_presets_folder, resolve_user_presets_root
+
         layout = self.layout
         layout.prop(self, "use_asset_color_space_pref")
         layout.prop(self, "gizmo_offset")
@@ -80,6 +97,19 @@ class Preferences(bpy.types.AddonPreferences):
         row = layout.row()
         row.prop(self, "cache_current_compositor", toggle=True)
         row.prop(self, "cache_current_cache_count")
+
+        layout.separator()
+
+        box = layout.box()
+        box.label(text="User presets")
+        default_folder = get_default_user_presets_folder().as_posix()
+        active_folder = resolve_user_presets_root().as_posix()
+        row = box.row(align=True)
+        row.label(text=default_folder, translate=False)
+        row.operator("wm.path_open", text="", icon="FILE_FOLDER").filepath = active_folder
+        box.prop(self, "use_custom_presets_path")
+        if self.use_custom_presets_path:
+            box.prop(self, "presets_path")
 
         layout.separator()
 

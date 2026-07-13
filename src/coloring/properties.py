@@ -2,7 +2,7 @@ from pathlib import Path
 
 import bpy
 
-from ...utils.common import get_resource_dir_locale, get_resource_dir, get_none_icon_path, get_asset_preset_dir
+from ...utils.common import get_resource_dir_locale, get_none_icon_path, get_asset_preset_dir
 from ...utils.icon import Icon
 from ...utils.logger import logger
 from ...utils.timer import Timer
@@ -17,6 +17,11 @@ def _enum_item_index(items, identifier: str) -> int:
         if item[0] == identifier:
             return index
     return 0
+
+
+class ColoristaHistoryItem(bpy.types.PropertyGroup):
+    name: bpy.props.StringProperty(default="")
+    file: bpy.props.StringProperty(default="")
 
 
 class Props(bpy.types.PropertyGroup):
@@ -126,6 +131,10 @@ class Props(bpy.types.PropertyGroup):
         return items[0][0]
 
     def update_asset(self, context):
+        from .state import suppress_asset_import
+
+        if suppress_asset_import:
+            return
         if not self.enable_coloring:
             return
         from .operators import schedule_import_compositor
@@ -181,7 +190,7 @@ class Props(bpy.types.PropertyGroup):
         items = []
         self._ref_items[preset_dir] = items
         if preset_dir.is_dir():
-            for file in sorted(preset_dir.glob("*.blend"), key=lambda x: x.name):
+            for file in sorted(preset_dir.glob("*.json"), key=lambda x: x.name):
                 icon_path = self.find_icon(file.stem, preset_dir)
                 icon_id = self._queue_asset_icon(icon_path)
                 items.append((file.as_posix(), file.stem, file.stem, icon_id, len(items)))
@@ -221,8 +230,12 @@ class Props(bpy.types.PropertyGroup):
                                                translation_context=PROP_TCTX,
                                                )
 
+    history_items: bpy.props.CollectionProperty(type=ColoristaHistoryItem)
+    history_items_index: bpy.props.IntProperty(default=0)
+
 
 clss = (
+    ColoristaHistoryItem,
     Props,
 )
 
@@ -235,5 +248,5 @@ def register():
 
 
 def unregister():
-    unreg()
     del bpy.types.Scene.colorista_prop
+    unreg()

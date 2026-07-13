@@ -77,8 +77,57 @@ def get_package_root() -> str:
     return __package__.rsplit(".", 1)[0]
 
 
+USER_PRESETS_DIR_NAME = "presets"
+
+
+def get_extension_user_folder() -> Path:
+    """Persistent user data root (never the extension install tree).
+
+    Same boundary as gesture_helper:
+    - Extension install (``bl_ext.*``): ``bpy.utils.extension_path_user``.
+    - Legacy ``scripts/addons``: ``extension_path_user`` raises ``ValueError``;
+      fall back to ``user_resource('DATAFILES')``.
+    """
+    try:
+        path = Path(bpy.utils.extension_path_user(get_package_root()))
+    except ValueError:
+        path = Path(bpy.utils.user_resource("DATAFILES", path="Colorista", create=True))
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_default_user_presets_folder() -> Path:
+    path = get_extension_user_folder().joinpath(USER_PRESETS_DIR_NAME)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def resolve_user_presets_root() -> Path:
+    """Active root for user-saved presets; optional custom path from preferences."""
+    folder = get_default_user_presets_folder()
+    try:
+        from ..src.preference import get_pref
+
+        pref = get_pref()
+    except Exception:
+        return folder
+    if pref is None or not getattr(pref, "use_custom_presets_path", False):
+        return folder
+    custom = (getattr(pref, "presets_path", "") or "").strip()
+    if not custom:
+        return folder
+    try:
+        custom_path = Path(bpy.path.abspath(custom)).resolve()
+    except OSError:
+        return folder
+    if custom_path.is_file():
+        return folder
+    custom_path.mkdir(parents=True, exist_ok=True)
+    return custom_path
+
+
 def get_user_cache_dir() -> Path:
-    cache = Path(bpy.utils.extension_path_user(get_package_root())).joinpath("cache")
+    cache = get_extension_user_folder().joinpath("cache")
     cache.mkdir(parents=True, exist_ok=True)
     return cache
 
@@ -124,9 +173,37 @@ def get_default_preset_path() -> Path | None:
     return None
 
 
-def get_asset_preset_dir(asset_path: Path) -> Path:
+def _asset_preset_key(asset_path: Path) -> Path:
+    """Stable relative key for an asset under the user presets root."""
     asset = Path(asset_path)
-    return asset.parent.joinpath(asset.stem)
+    try:
+        rel = asset.resolve().relative_to(get_resource_dir().resolve())
+        return rel.with_suffix("")
+    except (ValueError, OSError):
+        return Path(asset.stem)
+
+
+def get_asset_preset_dir(asset_path: Path) -> Path:
+    """User-writable preset folder for an asset (never under the install tree)."""
+    return resolve_user_presets_root().joinpath(_asset_preset_key(asset_path))
+
+
+def is_under_user_presets_root(path: Path | str) -> bool:
+    """True if *path* resolves under the active user presets root."""
+    try:
+        Path(path).resolve().relative_to(resolve_user_presets_root().resolve())
+    except (ValueError, OSError):
+        return False
+    return True
+
+
+def is_user_preset_file(path: Path | str) -> bool:
+    """True if *path* is an existing user-saved .json preset (safe to delete)."""
+    try:
+        p = Path(path).resolve()
+    except OSError:
+        return False
+    return p.suffix.lower() == ".json" and p.is_file() and is_under_user_presets_root(p)
 
 
 @lru_cache(maxsize=4)

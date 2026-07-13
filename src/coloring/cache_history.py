@@ -7,11 +7,6 @@ from ..preference import get_pref
 from ...utils.logger import logger
 
 
-class ColoristaHistoryItem(bpy.types.PropertyGroup):
-    name: bpy.props.StringProperty(default="")
-    file: bpy.props.StringProperty(default="")
-
-
 class COLORISTA_HISTORY_UL_UIList(bpy.types.UIList):
 
     def draw_item(self,
@@ -44,15 +39,24 @@ class ColoristaDeleteHistory(bpy.types.Operator):
             return {"FINISHED"}
         if file.is_dir():
             return {"CANCELLED"}
-        if file.suffix.lower() != ".blend":
+        if file.suffix.lower() != ".json":
             return {"CANCELLED"}
         file.unlink()
         update_history(context)
         return {"FINISHED"}
 
 
+def _cleanup_legacy_blend_history(cache_dir: Path) -> None:
+    for file in cache_dir.glob("*.blend"):
+        if file.is_file():
+            try:
+                file.unlink()
+            except OSError:
+                pass
+
+
 def _iter_history_files(cache_dir: Path) -> list[Path]:
-    files = [f for f in cache_dir.glob("*.blend") if f.is_file()]
+    files = [f for f in cache_dir.glob("*.json") if f.is_file()]
     return sorted(files, reverse=True)
 
 
@@ -61,13 +65,14 @@ def update_history(context=None):
     try:
         context = context or bpy.context
         cache_dir = get_user_cache_dir()
-        sce = context.scene
+        _cleanup_legacy_blend_history(cache_dir)
+        prop = context.scene.colorista_prop
         files = _iter_history_files(cache_dir)
         pref = get_pref()
         count = pref.cache_current_cache_count if pref else 10
-        sce.colorista_items.clear()
+        prop.history_items.clear()
         for file in files[:count]:
-            item = sce.colorista_items.add()
+            item = prop.history_items.add()
             item.name = file.stem
             item.file = file.as_posix()
         for file in files[count:]:
@@ -77,7 +82,6 @@ def update_history(context=None):
 
 
 clss = (
-    ColoristaHistoryItem,
     COLORISTA_HISTORY_UL_UIList,
     ColoristaDeleteHistory,
 )
@@ -87,11 +91,7 @@ reg, unreg = bpy.utils.register_classes_factory(clss)
 
 def register():
     reg()
-    bpy.types.Scene.colorista_items = bpy.props.CollectionProperty(type=ColoristaHistoryItem)
-    bpy.types.Scene.colorista_items_index = bpy.props.IntProperty(default=0)
 
 
 def unregister():
-    del bpy.types.Scene.colorista_items_index
-    del bpy.types.Scene.colorista_items
     unreg()
