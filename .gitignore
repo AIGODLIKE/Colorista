@@ -11,3 +11,4 @@ resource/CN/00Test
 resource/EN/00Test
 resource/cache
 *.blend
+*.json
