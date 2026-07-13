@@ -128,9 +128,9 @@ class Props(bpy.types.PropertyGroup):
     def update_asset(self, context):
         if not self.enable_coloring:
             return
-        from .operators import import_compositor
+        from .operators import schedule_import_compositor
 
-        import_compositor(context)
+        schedule_import_compositor()
 
     asset: bpy.props.EnumProperty(name="Asset",
                                   items=asset_items,
@@ -206,9 +206,9 @@ class Props(bpy.types.PropertyGroup):
             return
         if not self.enable_coloring:
             return
-        from .operators import import_compositor
+        from .operators import schedule_import_compositor
 
-        import_compositor(context, preset=self.preset)
+        schedule_import_compositor(preset=self.preset)
 
     preset: bpy.props.EnumProperty(name="Preset",
                                    items=get_presets,

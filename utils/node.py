@@ -53,10 +53,23 @@ def copy_node_tree_drivers(sf: bpy.types.Scene, st: bpy.types.Scene):
     remap_scene_compositor_driver_paths(st_tree.animation_data)
 
 
+def _clear_rlayers_scene_refs(tree: bpy.types.NodeTree | None) -> None:
+    """Detach R_LAYERS from live scenes so libraries.write won't copy view layers."""
+    if not tree:
+        return
+    for node in tree.nodes:
+        if node.type == "R_LAYERS":
+            try:
+                node.scene = None
+            except Exception:
+                pass
+
+
 def copy_comp_node_tree(sf: bpy.types.Scene, st: bpy.types.Scene):
     if bpy.app.version >= (5, 0, 0):
         sft = sf.compositing_node_group
-        st.compositing_node_group = sf.compositing_node_group.copy() if sft else sft
+        st.compositing_node_group = sft.copy() if sft else None
+        _clear_rlayers_scene_refs(st.compositing_node_group)
         return
     ensure_comp_node_tree(st)
     st_tree = get_comp_node_tree(st)
@@ -83,9 +96,7 @@ def copy_comp_node_tree(sf: bpy.types.Scene, st: bpy.types.Scene):
                 link.to_node.name,
                 link.from_socket.identifier,
             )
-    for node in st_tree.nodes:
-        if node.type == "R_LAYERS":
-            node.scene = None
+    _clear_rlayers_scene_refs(st_tree)
 
 
 def ensure_comp_node_tree(sce: bpy.types.Scene):

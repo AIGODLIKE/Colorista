@@ -20,6 +20,71 @@ from ...utils.node import (
     remap_scene_compositor_driver_paths,
     scene_uses_compositor,
 )
+from ...utils.timer import Timer
+
+# Coalesce deferred imports from EnumProperty update callbacks.
+_pending_import_kwargs: dict | None = None
+_import_scheduled = False
+
+
+def schedule_import_compositor(**kwargs) -> None:
+    """Defer import_compositor out of RNA property updates (avoids nested ops / write crashes)."""
+    global _pending_import_kwargs, _import_scheduled
+    _pending_import_kwargs = kwargs
+    if _import_scheduled:
+        return
+    _import_scheduled = True
+    Timer.put(_flush_scheduled_import)
+
+
+def _flush_scheduled_import() -> None:
+    global _pending_import_kwargs, _import_scheduled
+    _import_scheduled = False
+    kwargs = _pending_import_kwargs
+    _pending_import_kwargs = None
+    if kwargs is None:
+        return
+    try:
+        import_compositor(bpy.context, **kwargs)
+    except Exception:
+        logger.exception("Deferred compositor import failed")
+
+
+def _sync_scene_color_settings(sf: bpy.types.Scene, st: bpy.types.Scene) -> None:
+    try:
+        st.display_settings.display_device = sf.display_settings.display_device
+        st.view_settings.view_transform = sf.view_settings.view_transform
+    except TypeError:
+        pass
+
+
+def save_compositor_preset(filepath: Path | str, scene: bpy.types.Scene) -> Path:
+    """
+    Write current scene compositor into a standalone .blend (scene name AC-Coloring).
+    Plain function — safe to call from property updates (no bpy.ops).
+    """
+    path = Path(filepath)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = bpy.data.scenes.new(name="AC-Coloring")
+    tree_to_remove = None
+    try:
+        _sync_scene_color_settings(scene, temp)
+        copy_comp_node_tree(scene, temp)
+        copy_node_tree_drivers(scene, temp)
+        tree_to_remove = get_comp_node_tree(temp)
+        bpy.data.libraries.write(filepath=path.as_posix(), datablocks={temp})
+    finally:
+        try:
+            bpy.data.scenes.remove(temp)
+        except ReferenceError:
+            pass
+        if tree_to_remove is not None:
+            try:
+                if tree_to_remove.users == 0:
+                    bpy.data.node_groups.remove(tree_to_remove)
+            except ReferenceError:
+                pass
+    return path
 
 
 class CompositorImportHelper:
@@ -181,7 +246,9 @@ class CompositorImportHelper:
             name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             path = get_user_cache_dir().joinpath(f"{name}.blend")
             try:
-                bpy.ops.wm.colorista_save_preset(preset=path.as_posix(), popup=False)
+                # Do not call bpy.ops here — nested ops during property updates crash
+                # Blender 5.x in BKE_view_layer_copy_data via libraries.write.
+                save_compositor_preset(path, sce)
             except Exception as e:
                 logger.error(e)
             update_history(context)
@@ -357,11 +424,7 @@ class ColoristaSavePreset(bpy.types.Operator):
         copy_comp_node_tree(sf, st)
 
     def copy_scene_settings(self, sf: bpy.types.Scene, st: bpy.types.Scene):
-        try:
-            st.display_settings.display_device = sf.display_settings.display_device
-            st.view_settings.view_transform = sf.view_settings.view_transform
-        except TypeError:
-            pass
+        _sync_scene_color_settings(sf, st)
 
     def copy_scene(self, sf: bpy.types.Scene, st: bpy.types.Scene):
         self.copy_scene_settings(sf, st)
@@ -371,11 +434,12 @@ class ColoristaSavePreset(bpy.types.Operator):
     def execute(self, context: bpy.types.Context):
         path = self.get_preset_path(context)
         self.preset = ""
-        path.parent.mkdir(parents=True, exist_ok=True)
-        sce = bpy.data.scenes.new(name="AC-Coloring")
-        self.copy_scene(context.scene, sce)
-        bpy.data.libraries.write(filepath=path.as_posix(), datablocks={sce})
-        bpy.data.scenes.remove(sce)
+        try:
+            save_compositor_preset(path, context.scene)
+        except Exception as e:
+            logger.exception("Failed to save preset")
+            self.report({'ERROR'}, str(e))
+            return {"CANCELLED"}
         return {"FINISHED"}
 
 
