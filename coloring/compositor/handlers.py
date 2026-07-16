@@ -1,14 +1,45 @@
 """Depsgraph / render handlers and color-space sync."""
 
+from __future__ import annotations
+
 import re
+from typing import Callable
 
 import bpy
 
-from ..preference import get_pref
 from ...utils.logger import logger
 from ...utils.node import get_comp_node_tree
 
 VTC_NAME = "colorista-Color Space"
+
+# Injected by coloring.runtime (keeps handlers free of prefs imports).
+_main_node_group_name_fn: Callable[[], str] | None = None
+_enable_logging_fn: Callable[[], bool] | None = None
+_force_cpu_fn: Callable[[], bool] | None = None
+
+
+def configure_handlers(
+    *,
+    main_node_group_name: Callable[[], str] | None = None,
+    enable_logging: Callable[[], bool] | None = None,
+    force_use_cpu: Callable[[], bool] | None = None,
+) -> None:
+    global _main_node_group_name_fn, _enable_logging_fn, _force_cpu_fn
+    _main_node_group_name_fn = main_node_group_name
+    _enable_logging_fn = enable_logging
+    _force_cpu_fn = force_use_cpu
+
+
+def _main_node_group_name() -> str:
+    if _main_node_group_name_fn is not None:
+        return _main_node_group_name_fn()
+    return "Basic adjustment nodes for colorists"
+
+
+def _verbose() -> bool:
+    if _enable_logging_fn is not None:
+        return _enable_logging_fn()
+    return False
 
 
 class DepsgraphPostHandler:
@@ -53,16 +84,8 @@ class DepsgraphPostHandler:
         cls.handlers.clear()
 
 
-def _main_node_group_name() -> str:
-    pref = get_pref()
-    if pref and pref.main_node_group_name:
-        return pref.main_node_group_name
-    return "Basic adjustment nodes for colorists"
-
-
 def update_node_group(scene):
-    pref = get_pref()
-    verbose = pref.enable_logging if pref else False
+    verbose = _verbose()
     main_node_tree = get_comp_node_tree(scene)
     if not main_node_tree:
         return
@@ -77,14 +100,15 @@ def update_node_group(scene):
         if input_index < len(main_node_group.inputs):
             input_socket = main_node_group.inputs[input_index]
             input_name = input_socket.name
-            # Only write RNA when changed — unconditional mute/label writes
-            # re-trigger depsgraph and make the N-panel lag while dragging.
             should_mute = input_socket.default_value == 0
             if should_mute:
                 if not node.mute:
                     node.mute = True
                     if verbose:
-                        logger.debug("Child node %s is blocked because the parameter is 0", node.name)
+                        logger.debug(
+                            "Child node %s is blocked because the parameter is 0",
+                            node.name,
+                        )
             else:
                 new_label = f"Bound({input_name})"
                 if node.mute:
@@ -180,8 +204,7 @@ class RenderHandler:
 
 def switch_to_cpu_device(self: RenderHandler, scene: bpy.types.Scene):
     self.ctx["old_compositor_device"] = scene.render.compositor_device
-    pref = get_pref()
-    if pref and pref.force_use_cpu_render_image:
+    if _force_cpu_fn is not None and _force_cpu_fn():
         scene.render.compositor_device = "CPU"
 
 

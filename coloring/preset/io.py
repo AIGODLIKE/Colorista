@@ -11,7 +11,7 @@ import bpy
 from ...utils.logger import logger
 from ...utils.node import get_comp_node_tree
 from ...utils.paths import get_resource_dir
-from .ui_nodes import find_ui_node_inputs, iter_ui_coloring_nodes
+from ..compositor.ui_nodes import find_ui_node_inputs, iter_ui_coloring_nodes
 
 PRESET_VERSION = 1
 
@@ -318,13 +318,17 @@ def dump_color_settings(scene: bpy.types.Scene) -> dict:
     return data
 
 
-def apply_color_settings(scene: bpy.types.Scene, data: dict) -> None:
+def apply_color_settings(
+    scene: bpy.types.Scene,
+    data: dict,
+    *,
+    use_asset_color_space: bool | None = None,
+) -> None:
     if not data:
         return
-    from ..preference import get_pref
-
-    pref = get_pref()
-    if not pref or not pref.use_asset_color_space_pref:
+    if use_asset_color_space is None:
+        use_asset_color_space = False
+    if not use_asset_color_space:
         return
     if "display_device" in data:
         try:
@@ -348,8 +352,17 @@ def dump_scene_preset(scene: bpy.types.Scene, asset_path: Path | str) -> dict:
     }
 
 
-def apply_scene_preset(scene: bpy.types.Scene, data: dict) -> None:
-    apply_color_settings(scene, data.get("color") or {})
+def apply_scene_preset(
+    scene: bpy.types.Scene,
+    data: dict,
+    *,
+    use_asset_color_space: bool | None = None,
+) -> None:
+    apply_color_settings(
+        scene,
+        data.get("color") or {},
+        use_asset_color_space=use_asset_color_space,
+    )
     apply_node_tree_values(get_comp_node_tree(scene), data.get("nodes") or {})
 
 

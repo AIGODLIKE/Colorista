@@ -1,9 +1,9 @@
 import bpy
 
-from . import catalog
-from .constants import PRESET_NONE_ID, PROP_TCTX
-from .session import session
-from ...utils.logger import logger
+from .coloring.constants import PRESET_NONE_ID, PROP_TCTX
+from .coloring.session import session
+from .utils.logger import logger
+from .coloring import catalog
 
 _enable_update_guard = False
 
@@ -20,11 +20,11 @@ class Props(bpy.types.PropertyGroup):
         global _enable_update_guard
         if _enable_update_guard:
             return
-        from . import api
+        from .coloring import api as coloring
 
         if self.enable_coloring:
             logger.info("Coloring enabled")
-            if not api.enable(context):
+            if not coloring.enable(context):
                 _enable_update_guard = True
                 try:
                     self.enable_coloring = False
@@ -32,7 +32,7 @@ class Props(bpy.types.PropertyGroup):
                     _enable_update_guard = False
         else:
             logger.info("Coloring disabled")
-            api.disable(context)
+            coloring.disable(context)
 
     enable_coloring: bpy.props.BoolProperty(
         default=False,
@@ -72,7 +72,7 @@ class Props(bpy.types.PropertyGroup):
             return
         if not self.enable_coloring:
             return
-        from .api import schedule_load
+        from .coloring.api import schedule_load
 
         schedule_load()
 
@@ -97,7 +97,7 @@ class Props(bpy.types.PropertyGroup):
             return
         if not self.enable_coloring:
             return
-        from .api import schedule_load
+        from .coloring.api import schedule_load
 
         schedule_load(preset=self.preset)
 

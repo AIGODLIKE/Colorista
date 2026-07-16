@@ -1,4 +1,6 @@
-"""Addon / resource / user-preset path helpers."""
+"""Addon / resource / user-preset path helpers (prefs-agnostic)."""
+
+from __future__ import annotations
 
 from pathlib import Path
 
@@ -24,11 +26,11 @@ def _get_locale_suffix() -> str:
 
 
 def get_package_root() -> str:
+    """Extension / addon package id (parent of ``infra``)."""
     return __package__.rsplit(".", 1)[0]
 
 
 def get_addon_root() -> Path:
-    # utils/paths.py → addon root is two levels up
     return Path(__file__).resolve().parent.parent
 
 
@@ -88,28 +90,26 @@ def get_default_user_presets_folder() -> Path:
     return path
 
 
-def resolve_user_presets_root() -> Path:
-    """Active root for user-saved presets; optional custom path from preferences."""
-    folder = get_default_user_presets_folder()
-    try:
-        from ..src.preference import get_pref
+def resolve_user_presets_root(custom_path: str | None = None) -> Path:
+    """Active root for user-saved presets.
 
-        pref = get_pref()
-    except Exception:
-        return folder
-    if pref is None or not getattr(pref, "use_custom_presets_path", False):
-        return folder
-    custom = (getattr(pref, "presets_path", "") or "").strip()
-    if not custom:
+    Pass *custom_path* from preferences when a custom folder is enabled; utils
+    never imports the preferences package.
+    """
+    folder = get_default_user_presets_folder()
+    if not custom_path or not str(custom_path).strip():
         return folder
     try:
-        custom_path = Path(bpy.path.abspath(custom)).resolve()
+        custom = Path(bpy.path.abspath(str(custom_path).strip())).resolve()
     except OSError:
         return folder
-    if custom_path.is_file():
+    if custom.is_file():
         return folder
-    custom_path.mkdir(parents=True, exist_ok=True)
-    return custom_path
+    try:
+        custom.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return folder
+    return custom
 
 
 def get_user_cache_dir() -> Path:
@@ -150,12 +150,6 @@ def get_default_preset_path() -> Path | None:
         fallback = find_first_blend(category)
         if fallback is not None:
             return fallback
-
-    resource = get_resource_dir()
-    if resource.is_dir():
-        for blend in sorted(resource.rglob("default.blend")):
-            if blend.is_file():
-                return blend
     return None
 
 
@@ -168,22 +162,35 @@ def _asset_preset_key(asset_path: Path) -> Path:
         return Path(asset.stem)
 
 
-def get_asset_preset_dir(asset_path: Path) -> Path:
+def get_asset_preset_dir(asset_path: Path, *, custom_presets_root: str | None = None) -> Path:
     """User-writable preset folder for an asset (never under the install tree)."""
-    return resolve_user_presets_root().joinpath(_asset_preset_key(asset_path))
+    root = resolve_user_presets_root(custom_presets_root)
+    return root.joinpath(_asset_preset_key(asset_path))
 
 
-def is_under_user_presets_root(path: Path | str) -> bool:
+def is_under_user_presets_root(
+    path: Path | str,
+    *,
+    custom_presets_root: str | None = None,
+) -> bool:
     try:
-        Path(path).resolve().relative_to(resolve_user_presets_root().resolve())
+        Path(path).resolve().relative_to(resolve_user_presets_root(custom_presets_root).resolve())
     except (ValueError, OSError):
         return False
     return True
 
 
-def is_user_preset_file(path: Path | str) -> bool:
+def is_user_preset_file(
+    path: Path | str,
+    *,
+    custom_presets_root: str | None = None,
+) -> bool:
     try:
         p = Path(path).resolve()
     except OSError:
         return False
-    return p.suffix.lower() == ".json" and p.is_file() and is_under_user_presets_root(p)
+    return (
+        p.suffix.lower() == ".json"
+        and p.is_file()
+        and is_under_user_presets_root(p, custom_presets_root=custom_presets_root)
+    )
