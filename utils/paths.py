@@ -1,7 +1,5 @@
 """Addon / resource / user-preset path helpers."""
 
-import sys
-from functools import lru_cache
 from pathlib import Path
 
 import bpy
@@ -30,10 +28,7 @@ def get_package_root() -> str:
 
 
 def get_addon_root() -> Path:
-    root_pkg = get_package_root()
-    mod = sys.modules.get(root_pkg)
-    if mod is not None and getattr(mod, "__file__", None):
-        return Path(mod.__file__).resolve().parent
+    # utils/paths.py → addon root is two levels up
     return Path(__file__).resolve().parent.parent
 
 

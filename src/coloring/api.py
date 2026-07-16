@@ -71,7 +71,9 @@ def switch_preset(context: bpy.types.Context, delta: int) -> tuple[bool, str]:
         for item in catalog.list_presets(prop.get_asset_path(context), context)
         if item[0] != PRESET_NONE_ID
     ]
-    if len(items) <= 1:
+    if not items:
+        return False, _T("No preset available")
+    if len(items) == 1:
         return False, _T("Only one preset available")
 
     pos = catalog.enum_item_index(items, prop.preset)
