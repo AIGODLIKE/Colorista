@@ -6,7 +6,6 @@ from ...utils.icon import Icon
 from ...utils.node import get_comp_node_tree, scene_uses_compositor
 from ...utils.paths import get_icons_dir
 from .constants import PANEL_TCTX
-from .history import update_history
 from .operators import (
     ColoristaDeletePreset,
     ColoristaResetDefaults,
@@ -167,7 +166,6 @@ class ColoristaHistoryPanel(bpy.types.Panel):
     bl_options = {"INSTANCED"}
 
     def draw(self, context: bpy.types.Context):
-        update_history(context)
         prop = context.scene.colorista_prop
         layout = self.layout
         layout.template_list(

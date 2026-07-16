@@ -134,7 +134,7 @@ def _cache_history_json(context: bpy.types.Context, sce: bpy.types.Scene, *, no_
         asset_path = Path(session.last_loaded_asset)
     if asset_path is None:
         return
-    from .history import update_history
+    from .history import append_history_item
 
     name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     path = get_user_cache_dir().joinpath(f"{name}.json")
@@ -142,7 +142,8 @@ def _cache_history_json(context: bpy.types.Context, sce: bpy.types.Scene, *, no_
         save_compositor_values_json(path, sce, asset_path)
     except Exception as e:
         logger.error(e)
-    update_history(context)
+        return
+    append_history_item(context, path)
 
 
 def _finish_load(sce: bpy.types.Scene, label: str) -> bool:
