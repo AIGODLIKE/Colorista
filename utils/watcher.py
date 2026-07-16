@@ -1,5 +1,5 @@
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
 
 from .logger import logger
 
@@ -30,7 +30,7 @@ class FSWatcher:
 
     @classmethod
     def register(cls, path, callback=None):
-        del callback  # callbacks unused; kept for call-site compatibility
+        del callback  # unused; kept for call-site compatibility
         path = cls.to_path(path)
         if not path or path in cls._watcher_path:
             return
@@ -66,6 +66,8 @@ class FSWatcher:
 
     @classmethod
     def consume_change(cls, path) -> bool:
+        if not cls._enabled:
+            return False
         path = cls.to_path(path)
         if not path:
             return False

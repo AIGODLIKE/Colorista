@@ -1,18 +1,18 @@
+"""Compositor node-tree access and driver helpers."""
+
 import bpy
 
+from .compat import IS_BL5
 from .logger import logger
 
 
 def scene_uses_compositor(sce: bpy.types.Scene) -> bool:
-    if bpy.app.version >= (5, 0, 0):
+    if IS_BL5:
         return sce.compositing_node_group is not None
     return bool(sce.use_nodes)
 
 
 def copy_node_properties(nf: bpy.types.Node, nt: bpy.types.Node):
-    """
-    拷贝两个节点的属性, 节点组需要特殊处理
-    """
     if nt.type == "GROUP":
         nt.node_tree = nf.node_tree
     bpy.context.view_layer.update()
@@ -42,9 +42,7 @@ def copy_node_properties(nf: bpy.types.Node, nt: bpy.types.Node):
 def copy_node_tree_drivers(sf: bpy.types.Scene, st: bpy.types.Scene):
     st_tree = get_comp_node_tree(st)
     sf_tree = get_comp_node_tree(sf)
-    if not sf_tree:
-        return
-    if not sf_tree.animation_data:
+    if not sf_tree or not sf_tree.animation_data:
         return
     if not st_tree.animation_data:
         st_tree.animation_data_create()
@@ -53,54 +51,8 @@ def copy_node_tree_drivers(sf: bpy.types.Scene, st: bpy.types.Scene):
     remap_scene_compositor_driver_paths(st_tree.animation_data)
 
 
-def _clear_rlayers_scene_refs(tree: bpy.types.NodeTree | None) -> None:
-    """Detach R_LAYERS from live scenes so libraries.write won't copy view layers."""
-    if not tree:
-        return
-    for node in tree.nodes:
-        if node.type == "R_LAYERS":
-            try:
-                node.scene = None
-            except Exception:
-                pass
-
-
-def copy_comp_node_tree(sf: bpy.types.Scene, st: bpy.types.Scene):
-    if bpy.app.version >= (5, 0, 0):
-        sft = sf.compositing_node_group
-        st.compositing_node_group = sft.copy() if sft else None
-        _clear_rlayers_scene_refs(st.compositing_node_group)
-        return
-    ensure_comp_node_tree(st)
-    st_tree = get_comp_node_tree(st)
-    sf_tree = get_comp_node_tree(sf)
-    st_tree.nodes.clear()
-    node_map = {}
-    for node in sf_tree.nodes:
-        new_node = st_tree.nodes.new(type=node.bl_idname)
-        if new_node.type == "GROUP":
-            new_node.node_tree = node.node_tree
-        copy_node_properties(node, new_node)
-        node_map[node.name] = new_node
-    for link in sf_tree.links:
-        fnode = node_map[link.from_node.name]
-        tnode = node_map[link.to_node.name]
-        try:
-            fsocket = fnode.outputs[link.from_socket.identifier]
-            tsocket = tnode.inputs[link.to_socket.identifier]
-            st_tree.links.new(tsocket, fsocket)
-        except KeyError:
-            logger.debug(
-                "KeyError linking nodes: %s %s %s",
-                link.from_node.name,
-                link.to_node.name,
-                link.from_socket.identifier,
-            )
-    _clear_rlayers_scene_refs(st_tree)
-
-
 def ensure_comp_node_tree(sce: bpy.types.Scene):
-    if bpy.app.version >= (5, 0):
+    if IS_BL5:
         if sce.compositing_node_group:
             return
         tree = bpy.data.node_groups.new("Render Layers", "CompositorNodeTree")
@@ -110,14 +62,14 @@ def ensure_comp_node_tree(sce: bpy.types.Scene):
 
 
 def get_comp_node_tree(sce: bpy.types.Scene) -> bpy.types.CompositorNodeTree:
-    if bpy.app.version >= (5, 0):
+    if IS_BL5:
         return sce.compositing_node_group
     return sce.node_tree
 
 
 def remap_scene_compositor_driver_paths(an: bpy.types.AnimData) -> None:
     """Remap legacy scene.node_tree paths in drivers for Blender 5.x."""
-    if bpy.app.version < (5, 0, 0) or not an:
+    if not IS_BL5 or not an:
         return
     old_prefix = "node_tree."
     new_prefix = "compositing_node_group."

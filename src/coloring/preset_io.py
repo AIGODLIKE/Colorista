@@ -8,10 +8,10 @@ from typing import Any
 
 import bpy
 
-from ...utils.common import get_resource_dir
 from ...utils.logger import logger
 from ...utils.node import get_comp_node_tree
-from .utils import find_ui_node_inputs, iter_ui_coloring_nodes
+from ...utils.paths import get_resource_dir
+from .ui_nodes import find_ui_node_inputs, iter_ui_coloring_nodes
 
 PRESET_VERSION = 1
 
@@ -28,9 +28,7 @@ def _to_json_value(value: Any) -> Any:
 
 
 def dump_curve_mapping(mapping: bpy.types.CurveMapping) -> dict:
-    data: dict[str, Any] = {
-        "curves": [],
-    }
+    data: dict[str, Any] = {"curves": []}
     for attr in (
         "extend",
         "tone",
@@ -217,14 +215,11 @@ def _apply_socket_inputs(node: bpy.types.Node, inputs: dict) -> None:
 
 
 def dump_ui_node(node: bpy.types.Node) -> dict:
-    """Dump only values exposed in the Colorista panel for this node."""
     data: dict[str, Any] = {}
-
     inputs = _dump_ui_socket_inputs(node)
     if inputs:
         data["inputs"] = inputs
 
-    # Shown via node.draw_buttons (HSV correct / RGB curves / ramps on the node itself).
     mapping = getattr(node, "mapping", None)
     if mapping is not None and isinstance(mapping, bpy.types.CurveMapping):
         data["mapping"] = dump_curve_mapping(mapping)
@@ -251,18 +246,16 @@ def apply_ui_node(node: bpy.types.Node, data: dict) -> None:
         if color_ramp is not None and isinstance(color_ramp, bpy.types.ColorRamp):
             apply_color_ramp(color_ramp, data["color_ramp"])
 
-    # Legacy presets may still contain nested group dumps; apply if present.
     nested = data.get("nodes")
     if nested and node.type == "GROUP" and getattr(node, "node_tree", None):
         apply_node_tree_values(node.node_tree, nested)
 
 
 def dump_node_tree_values(tree: bpy.types.NodeTree | None) -> dict:
-    """Serialize only top-level nodes that appear in the Colorista UI."""
     if tree is None:
         return {}
     nodes: dict[str, Any] = {}
-    for node in iter_ui_coloring_nodes(tree):
+    for node, _sockets in iter_ui_coloring_nodes(tree):
         if len(node.inputs) == 0:
             continue
         node_data = dump_ui_node(node)
@@ -376,7 +369,6 @@ def save_compositor_values_json(
     scene: bpy.types.Scene,
     asset_path: Path | str,
 ) -> Path:
-    """Write UI-tunable compositor values as JSON. Safe from property updates (no bpy.ops)."""
     data = dump_scene_preset(scene, asset_path)
     path = write_preset_json(filepath, data)
     logger.debug("Saved compositor values JSON: %s", path)

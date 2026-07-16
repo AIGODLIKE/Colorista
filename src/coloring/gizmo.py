@@ -1,7 +1,8 @@
 import bpy
 
-from .utils import toggle_viewport_shading
 from ..preference import get_pref
+from .constants import OPS_TCTX
+from .viewport import toggle_viewport_shading
 
 
 def calc_widget_unit():
@@ -89,7 +90,8 @@ def _navigate_button_slots(context: bpy.types.Context) -> int:
 class ColoristaGzOps(bpy.types.Operator):
     bl_idname = "wm.colorista_gz_switch_compositor"
     bl_label = "Switch View Compositor"
-    bl_description = "Switch View Compositor"
+    bl_description = "Toggle viewport compositor for this window"
+    bl_translation_context = OPS_TCTX
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -109,6 +111,7 @@ class ColoristaGzOps(bpy.types.Operator):
 class ColoristaGizmos(bpy.types.GizmoGroup):
     bl_idname = "ColoristaGizmos"
     bl_label = "Colorista gizmos"
+    bl_translation_context = OPS_TCTX
     bl_space_type = "VIEW_3D"
     bl_region_type = "WINDOW"
     bl_options = {"PERSISTENT", "SCALE", "SHOW_MODAL_ALL"}

@@ -1,3 +1,5 @@
+"""Depsgraph / render handlers and color-space sync."""
+
 import re
 
 import bpy
@@ -6,17 +8,19 @@ from ..preference import get_pref
 from ...utils.logger import logger
 from ...utils.node import get_comp_node_tree
 
+VTC_NAME = "colorista-Color Space"
+
 
 class DepsgraphPostHandler:
-    handlers: dict[callable, None] = {}
+    handlers: dict = {}
     _registered = False
 
     @classmethod
-    def add(cls, handler: callable):
+    def add(cls, handler):
         cls.handlers[handler] = None
 
     @classmethod
-    def remove(cls, handler: callable):
+    def remove(cls, handler):
         cls.handlers.pop(handler, None)
 
     @classmethod
@@ -73,22 +77,29 @@ def update_node_group(scene):
         if input_index < len(main_node_group.inputs):
             input_socket = main_node_group.inputs[input_index]
             input_name = input_socket.name
-            if input_socket.default_value == 0:
-                node.mute = True
-                if verbose:
-                    logger.debug("Child node %s is blocked because the parameter is 0", node.name)
+            # Only write RNA when changed — unconditional mute/label writes
+            # re-trigger depsgraph and make the N-panel lag while dragging.
+            should_mute = input_socket.default_value == 0
+            if should_mute:
+                if not node.mute:
+                    node.mute = True
+                    if verbose:
+                        logger.debug("Child node %s is blocked because the parameter is 0", node.name)
             else:
-                node.label = f"Bound({input_name})"
-                node.mute = False
-                if verbose:
-                    logger.debug("The new label for the child node is: %s", node.label)
+                new_label = f"Bound({input_name})"
+                if node.mute:
+                    node.mute = False
+                if node.label != new_label:
+                    node.label = new_label
+                    if verbose:
+                        logger.debug("The new label for the child node is: %s", node.label)
         elif verbose:
             logger.debug("Input number %s is out of range", input_index)
 
 
 class RenderHandler:
     _STAGES = ("pre", "post", "init", "complete")
-    handlers: dict[str, dict[callable, None]] = {
+    handlers: dict[str, dict] = {
         "pre": {},
         "post": {},
         "init": {},
@@ -104,7 +115,7 @@ class RenderHandler:
                 cls.handlers[stage] = {}
 
     @classmethod
-    def add(cls, handler: callable, stage="pre"):
+    def add(cls, handler, stage="pre"):
         cls._ensure_stages()
         if stage not in cls.handlers:
             raise ValueError(f"Invalid stage: {stage}")
@@ -180,10 +191,39 @@ def restore_render_device(self: RenderHandler, scene: bpy.types.Scene):
         scene.render.compositor_device = old
 
 
-def register():
-    pass
+def has_custom_vt_control() -> bool:
+    tree = get_comp_node_tree(bpy.context.scene)
+    if not tree:
+        return False
+    color_space_control = tree.nodes.get(VTC_NAME)
+    if not color_space_control or not color_space_control.inputs:
+        return False
+    space = color_space_control.inputs.get("Space")
+    if not space:
+        space = color_space_control.inputs[0]
+    return space is not None
 
 
-def unregister():
-    DepsgraphPostHandler.unregister()
-    RenderHandler.unregister()
+def update_custom_vt():
+    if not has_custom_vt_control():
+        return
+    tree = get_comp_node_tree(bpy.context.scene)
+    color_space_control = tree.nodes.get(VTC_NAME)
+    space = color_space_control.inputs.get("Space")
+    if not space:
+        space = color_space_control.inputs[0]
+    try:
+        color_space = float(space.default_value)
+        ori_vt = bpy.context.scene.view_settings.view_transform
+        space_value_map = {
+            "AgX": 0,
+            "Standard": 0.1,
+            "Filmic": 0.2,
+            "Khronos PBR Neutral": 0.3,
+        }
+        space_value = space_value_map.get(ori_vt, 0)
+        if abs(space_value - color_space) < 0.00001:
+            return
+        space.default_value = space_value
+    except Exception:
+        pass
