@@ -1,19 +1,23 @@
 import bpy
+
+from ..preference import get_pref
+from ...utils.compat import IS_BL42_PLUS
+from ...utils.icon import Icon
+from ...utils.node import get_comp_node_tree, scene_uses_compositor
+from ...utils.paths import get_icons_dir
+from .constants import PANEL_TCTX
+from .history import update_history
 from .operators import (
-    ColoristaSavePreset,
     ColoristaDeletePreset,
-    ColoristaSwitchPreset,
+    ColoristaResetDefaults,
+    ColoristaSavePreset,
+    ColoristaSwitchAsset,
     ColoristaSwitchDevice,
     ColoristaSwitchPrecision,
+    ColoristaSwitchPreset,
 )
-from .cache_history import update_history
-from ..preference import get_pref
-from ...utils.icon import Icon
-from ...utils.common import get_icons_dir
-from ...utils.node import get_comp_node_tree, scene_uses_compositor
-from .utils import (
+from .ui_nodes import (
     draw_layout_panel,
-    find_ui_node_inputs,
     iter_ui_coloring_nodes,
     node_panel_id,
 )
@@ -25,7 +29,7 @@ class ColoringPanel(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Colorista"
-    bl_translation_context = "ColoristaPanelTCTX"
+    bl_translation_context = PANEL_TCTX
 
     def draw(self, context):
         layout = self.layout
@@ -43,10 +47,10 @@ class ColoringPanel(bpy.types.Panel):
         comp_tree = get_comp_node_tree(context.scene)
         if comp_tree is None:
             return
-        for node in iter_ui_coloring_nodes(comp_tree):
+        first_panel = True
+        for node, sockets in iter_ui_coloring_nodes(comp_tree):
             if len(node.inputs) == 0:
                 continue
-            sockets = find_ui_node_inputs(node)
             panel_id = node_panel_id(comp_tree, node)
             header, body = draw_layout_panel(layout, panel_id, default_closed=False)
             if node.type != "GROUP":
@@ -55,12 +59,19 @@ class ColoringPanel(bpy.types.Panel):
                 header.label(text=node.node_tree.name)
             else:
                 header.label(text=node.name)
+            if first_panel:
+                header.operator(
+                    ColoristaResetDefaults.bl_idname,
+                    text="",
+                    icon="FILE_REFRESH",
+                    emboss=False,
+                )
+                first_panel = False
             if not body:
                 continue
-            if bpy.app.version >= (4, 2):
-                body.separator(type="LINE")
-            else:
-                body.separator()
+            from ...utils.compat import layout_separator
+
+            layout_separator(body)
             node.draw_buttons(context, body)
             bbox = body
             for inp in sockets:
@@ -81,30 +92,39 @@ class ColoringPanel(bpy.types.Panel):
         row = layout.row(align=True)
         prop = context.scene.colorista_prop
         render = context.scene.render
+        enabled = prop.enable_coloring
 
-        row.alert = prop.enable_coloring
+        row.alert = enabled
         row.prop(prop, "enable_coloring", toggle=True, icon="QUIT", text="")
 
-        if (4, 2) <= bpy.app.version:
+        if IS_BL42_PLUS:
             auto = render.compositor_precision == "AUTO"
-            row.alert = not auto
+            row.alert = enabled and not auto
             ipath = get_icons_dir()
-            icon = Icon.reg_icon(ipath.joinpath("precision50.png")) if auto else Icon.reg_icon(ipath.joinpath("precision100.png"))
+            icon = (
+                Icon.reg_icon(ipath.joinpath("precision50.png"))
+                if auto
+                else Icon.reg_icon(ipath.joinpath("precision100.png"))
+            )
             row.operator(ColoristaSwitchPrecision.bl_idname, icon_value=icon, text="")
 
             gpu = render.compositor_device == "GPU"
-            row.alert = gpu
-            icon = Icon.reg_icon(ipath.joinpath("gpu.png")) if gpu else Icon.reg_icon(ipath.joinpath("cpu.png"))
+            row.alert = enabled and gpu
+            icon = (
+                Icon.reg_icon(ipath.joinpath("gpu.png"))
+                if gpu
+                else Icon.reg_icon(ipath.joinpath("cpu.png"))
+            )
             row.operator(ColoristaSwitchDevice.bl_idname, icon_value=icon, text="")
 
             row.alert = False
         pref = get_pref()
         if pref:
-            row.alert = pref.use_asset_color_space_pref
-            row.prop(pref, "use_asset_color_space_pref", text="", icon="FILE_REFRESH")
-            row.alert = pref.cache_current_compositor
+            row.alert = enabled and pref.use_asset_color_space_pref
+            row.prop(pref, "use_asset_color_space_pref", text="", icon="COLOR")
+            row.alert = enabled and pref.cache_current_compositor
             row.prop(pref, "cache_current_compositor", text="", icon="DOCUMENTS")
-            row.alert = pref.force_use_cpu_render_image
+            row.alert = enabled and pref.force_use_cpu_render_image
             row.prop(pref, "force_use_cpu_render_image", text="", icon="GEOMETRY_SET")
         row.alert = False
         row.popover("COLORISTA_PT_History", text="", icon="RECOVER_LAST")
@@ -119,11 +139,13 @@ class ColoringPanel(bpy.types.Panel):
         pref = get_pref()
         row.scale_y = pref.ui_icon_scale if pref else 8
         row.scale_x = 1.05
-        row.prop(prop, "last_asset", text="", icon="TRIA_LEFT")
+        op = row.operator(ColoristaSwitchAsset.bl_idname, text="", icon="TRIA_LEFT")
+        op.direction = "PREV"
         sub = row.row()
         sub.scale_y = 0.17
         sub.template_icon_view(prop, "asset", show_labels=True, scale_popup=5)
-        row.prop(prop, "next_asset", text="", icon="TRIA_RIGHT")
+        op = row.operator(ColoristaSwitchAsset.bl_idname, text="", icon="TRIA_RIGHT")
+        op.direction = "NEXT"
         row = layout.row(align=True)
         op = row.operator(ColoristaSwitchPreset.bl_idname, text="", icon="TRIA_LEFT")
         op.direction = "PREV"
@@ -141,6 +163,7 @@ class ColoristaHistoryPanel(bpy.types.Panel):
     bl_idname = "COLORISTA_PT_History"
     bl_space_type = "VIEW_3D"
     bl_region_type = "WINDOW"
+    bl_translation_context = PANEL_TCTX
     bl_options = {"INSTANCED"}
 
     def draw(self, context: bpy.types.Context):

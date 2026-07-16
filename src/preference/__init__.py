@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import bpy
 
-PROP_TCTX = "ColoristaTCTX"
+from ..coloring.constants import PROP_TCTX
 
 
 def get_package() -> str:
@@ -44,7 +44,7 @@ class Preferences(bpy.types.AddonPreferences):
                                                      translation_context=PROP_TCTX)
 
     def update_cache_current_cache_count(self, context):
-        from ..coloring.cache_history import update_history
+        from ..coloring.history import update_history
         update_history()
 
     cache_current_cache_count: bpy.props.IntProperty(name="Cache Count",
@@ -87,7 +87,7 @@ class Preferences(bpy.types.AddonPreferences):
     )
 
     def draw(self, context):
-        from ...utils.common import get_default_user_presets_folder, resolve_user_presets_root
+        from ...utils.paths import get_default_user_presets_folder, resolve_user_presets_root
 
         layout = self.layout
         layout.prop(self, "use_asset_color_space_pref")

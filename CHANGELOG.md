@@ -1,8 +1,14 @@
 # Changelog
 
+## 2026-7-16
+
+重构: 架构分层（api / catalog / load / transfer / session / handlers）；统一资产与预设切换操作符；合成树迁移与 4.x/5.x 兼容集中；精简 Icon / 路径工具；清理死代码
+
+---
+
 ## 2026-7-10 v1.2.2
 
-修复: zip 安装后找不到默认预设（default.blend 路径解析）；预设列表无图标；开启调色失败时 RuntimeError 未捕获导致崩溃
+修复: zip 安装后找不到默认预设（default.blend 路径解析）；预设列表无图标；开启调色失败时 RuntimeError 未捕获导致崩溃；资产/预设枚举缩略图异步加载后缓存仍指向 NONE 占位图
 
 ---
 

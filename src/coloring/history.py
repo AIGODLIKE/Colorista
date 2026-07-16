@@ -1,18 +1,28 @@
 import bpy
 from pathlib import Path
-from .operators import CompositorNodeTreeImport
-from ...utils.common import get_user_cache_dir
+
 from ..i18n import _T
+from .constants import OPS_TCTX
 from ..preference import get_pref
 from ...utils.logger import logger
+from ...utils.paths import get_user_cache_dir
+from .operators import CompositorNodeTreeImport
 
 
 class COLORISTA_HISTORY_UL_UIList(bpy.types.UIList):
 
-    def draw_item(self,
-                  context: bpy.types.Context,
-                  layout: bpy.types.UILayout,
-                  data, item, icon, active_data, active_property, index=0, flt_flag=0):
+    def draw_item(
+        self,
+        context: bpy.types.Context,
+        layout: bpy.types.UILayout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_property,
+        index=0,
+        flt_flag=0,
+    ):
         row = layout.row(align=True)
         row.label(text=item.name)
         op = row.operator(CompositorNodeTreeImport.bl_idname, text="", icon="TIME")
@@ -23,11 +33,12 @@ class COLORISTA_HISTORY_UL_UIList(bpy.types.UIList):
 
 class ColoristaDeleteHistory(bpy.types.Operator):
     bl_idname = "wm.colorista_delete_history"
-    bl_description = "Delete history"
+    bl_description = "Delete this history entry"
     bl_label = "Delete history"
-    bl_options = {'INTERNAL'}
+    bl_translation_context = OPS_TCTX
+    bl_options = {"INTERNAL"}
 
-    file: bpy.props.StringProperty(default="", options={'HIDDEN', 'SKIP_SAVE'})
+    file: bpy.props.StringProperty(default="", options={"HIDDEN", "SKIP_SAVE"})
 
     def execute(self, context: bpy.types.Context):
         if not self.file:
@@ -35,7 +46,7 @@ class ColoristaDeleteHistory(bpy.types.Operator):
         file = Path(self.file)
         if not file.exists():
             update_history(context)
-            self.report({'WARNING'}, _T("History file not found"))
+            self.report({"WARNING"}, _T("History file not found"))
             return {"FINISHED"}
         if file.is_dir():
             return {"CANCELLED"}
@@ -60,7 +71,6 @@ def _iter_history_files(cache_dir: Path) -> list[Path]:
     return sorted(files, reverse=True)
 
 
-@bpy.app.handlers.persistent
 def update_history(context=None):
     try:
         context = context or bpy.context
