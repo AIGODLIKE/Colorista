@@ -2,55 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 import bpy
 
-from ..i18n import _T
-from ..preference import get_pref
+from ...src.translate import _T
 from ...utils.compat import IS_BL42_TO_43, IS_BL5
 from ...utils.logger import logger
 from ...utils.node import ensure_comp_node_tree, get_comp_node_tree, scene_uses_compositor
-from ...utils.paths import get_default_preset_path, get_user_cache_dir
-from ...utils.timer import Timer
-from . import catalog
+from ...utils.paths import get_default_preset_path
+from ..session import preset_key, session
 from .handlers import update_custom_vt, update_node_group
-from .preset_io import (
-    apply_scene_preset,
-    read_preset_json,
-    resolve_asset_path,
-    save_compositor_values_json,
-)
-from .session import preset_key, session
 from .transfer import reload_drivers, reset_driver_with_scene_ref, transfer_compositor
 from .viewport import set_viewport_shading
-
-_pending_kwargs: dict | None = None
-_import_scheduled = False
-
-
-def schedule_load(**kwargs) -> None:
-    """Defer load out of RNA property updates (avoids nested ops / write crashes)."""
-    global _pending_kwargs, _import_scheduled
-    _pending_kwargs = kwargs
-    if _import_scheduled:
-        return
-    _import_scheduled = True
-    Timer.put(_flush_scheduled_load)
-
-
-def _flush_scheduled_load() -> None:
-    global _pending_kwargs, _import_scheduled
-    _import_scheduled = False
-    kwargs = _pending_kwargs
-    _pending_kwargs = None
-    if kwargs is None:
-        return
-    try:
-        load(bpy.context, **kwargs)
-    except Exception:
-        logger.exception("Deferred compositor import failed")
 
 
 def _report(reporter, type_set, message: str) -> None:
@@ -68,17 +32,6 @@ def _rsc_used(rsc) -> bool:
         return (rsc.users >= 1 and not rsc.use_fake_user) or rsc.users >= 2
     except ReferenceError:
         return False
-
-
-def _current_asset_path(context: bpy.types.Context) -> Path | None:
-    try:
-        asset = context.scene.colorista_prop.get_asset_path(context)
-    except AttributeError:
-        return None
-    if not asset:
-        return None
-    path = Path(asset)
-    return path if path.exists() else None
 
 
 def _load_compositor_scene(path: str):
@@ -123,29 +76,6 @@ def _load_compositor_sce(preset, context: bpy.types.Context):
         return None
 
 
-def _cache_history_json(context: bpy.types.Context, sce: bpy.types.Scene, *, no_cache: bool) -> None:
-    pref = get_pref()
-    if not pref or not pref.cache_current_compositor or no_cache:
-        return
-    if not scene_uses_compositor(sce):
-        return
-    asset_path = _current_asset_path(context)
-    if asset_path is None and session.last_loaded_asset:
-        asset_path = Path(session.last_loaded_asset)
-    if asset_path is None:
-        return
-    from .history import append_history_item
-
-    name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    path = get_user_cache_dir().joinpath(f"{name}.json")
-    try:
-        save_compositor_values_json(path, sce, asset_path)
-    except Exception as e:
-        logger.error(e)
-        return
-    append_history_item(context, path)
-
-
 def _finish_load(sce: bpy.types.Scene, label: str) -> bool:
     logger.info(_T("Load Compositor: {}").format(label))
     update_node_group(sce)
@@ -183,11 +113,7 @@ def _remove_orphan_node_groups(groups: set) -> None:
 
 
 def _purge_compositor_before_reload(context: bpy.types.Context) -> None:
-    """Detach and remove prior Colorista compositor data before library append.
-
-    Without this, append creates ``Name.001`` / ``Name.002`` duplicates because
-    the previous asset's node groups are still in ``bpy.data``.
-    """
+    """Detach and remove prior Colorista compositor data before library append."""
     sce = context.scene
     to_remove = set(session.loaded_node_groups)
 
@@ -207,7 +133,12 @@ def _purge_compositor_before_reload(context: bpy.types.Context) -> None:
     _remove_orphan_node_groups(to_remove)
 
 
-def load_asset(blend_path: Path, context: bpy.types.Context) -> bool:
+def load_asset(
+    blend_path: Path,
+    context: bpy.types.Context,
+    *,
+    use_asset_color_space: bool = False,
+) -> bool:
     """Load .blend topology into the current scene compositor."""
     sce = context.scene
     if IS_BL42_TO_43:
@@ -220,7 +151,11 @@ def load_asset(blend_path: Path, context: bpy.types.Context) -> bool:
     if not load_sce:
         return False
     new_nts = set(bpy.data.node_groups) - old_nts
-    transfer_compositor(load_sce, context)
+    transfer_compositor(
+        load_sce,
+        context,
+        use_asset_color_space=use_asset_color_space,
+    )
     for nt in new_nts:
         reset_driver_with_scene_ref(nt.animation_data, load_sce)
     for ls in load_sce:
@@ -238,8 +173,17 @@ def load_asset(blend_path: Path, context: bpy.types.Context) -> bool:
     return True
 
 
-def apply_preset(preset_path: Path, context: bpy.types.Context, *, reporter=None) -> bool:
+def apply_preset(
+    preset_path: Path,
+    context: bpy.types.Context,
+    *,
+    reporter=None,
+    use_asset_color_space: bool = False,
+    sync_asset_enum=None,
+) -> bool:
     """Apply a .json preset (loads asset topology if needed)."""
+    from ..preset.io import apply_scene_preset, read_preset_json, resolve_asset_path
+
     sce = context.scene
     try:
         data = read_preset_json(preset_path)
@@ -258,29 +202,28 @@ def apply_preset(preset_path: Path, context: bpy.types.Context, *, reporter=None
         and get_comp_node_tree(sce) is not None
     )
     if not same_asset:
-        if not load_asset(asset_path, context):
+        if not load_asset(
+            asset_path, context, use_asset_color_space=use_asset_color_space
+        ):
             _report(reporter, {"ERROR"}, _T("Failed to load compositor from {}").format(asset_path))
             return False
     else:
         set_viewport_shading("ALWAYS", context)
 
     try:
-        apply_scene_preset(sce, data)
+        apply_scene_preset(
+            sce, data, use_asset_color_space=use_asset_color_space
+        )
     except Exception:
         logger.exception("Failed to apply preset JSON: %s", preset_path)
         _report(reporter, {"ERROR"}, _T("Failed to load compositor from {}").format(preset_path))
         return False
 
-    try:
-        prop = sce.colorista_prop
-        asset_id = asset_path.as_posix()
-        items = catalog.list_assets(prop.pre_dir, context)
-        valid = {item[0] for item in items}
-        if asset_id in valid and prop.asset != asset_id:
-            with session.suppress_asset_updates():
-                prop.asset = asset_id
-    except Exception:
-        pass
+    if sync_asset_enum is not None:
+        try:
+            sync_asset_enum(context, asset_path)
+        except Exception:
+            pass
 
     return _finish_load(sce, preset_path.as_posix())
 
@@ -294,11 +237,14 @@ def load(
     cache: bool = True,
     force: bool = False,
     reporter=None,
+    use_asset_color_space: bool = False,
+    sync_asset_enum=None,
 ) -> bool:
     """Load a compositor asset or preset into the current scene.
 
-    ``preset`` is an alias of ``path`` for operator compatibility.
+    *cache* is unused here; history is orchestrated by ``coloring.api``.
     """
+    del cache  # handled by coloring.api facade
     target = path if path is not None else preset
 
     if use_default:
@@ -325,12 +271,19 @@ def load(
         return True
 
     sce = context.scene
-    _cache_history_json(context, sce, no_cache=not cache)
 
     if preset_path.suffix.lower() == ".json":
-        ok = apply_preset(preset_path, context, reporter=reporter)
+        ok = apply_preset(
+            preset_path,
+            context,
+            reporter=reporter,
+            use_asset_color_space=use_asset_color_space,
+            sync_asset_enum=sync_asset_enum,
+        )
     else:
-        if not load_asset(preset_path, context):
+        if not load_asset(
+            preset_path, context, use_asset_color_space=use_asset_color_space
+        ):
             _report(reporter, {"ERROR"}, _T("Failed to load compositor from {}").format(preset_path))
             return False
         ok = _finish_load(sce, preset_path.as_posix())
@@ -339,3 +292,4 @@ def load(
         return False
     session.set_loaded_preset(preset_path)
     return True
+

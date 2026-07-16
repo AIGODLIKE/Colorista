@@ -11,12 +11,15 @@ from ...utils.node import (
     copy_node_tree_drivers,
     get_comp_node_tree,
 )
-from ..preference import get_pref
 
 
-def sync_color_settings(current_sce: bpy.types.Scene, loaded_sce: bpy.types.Scene) -> None:
-    pref = get_pref()
-    if not pref or not pref.use_asset_color_space_pref:
+def sync_color_settings(
+    current_sce: bpy.types.Scene,
+    loaded_sce: bpy.types.Scene,
+    *,
+    use_asset_color_space: bool = False,
+) -> None:
+    if not use_asset_color_space:
         return
     try:
         current_sce.display_settings.display_device = loaded_sce.display_settings.display_device
@@ -25,45 +28,60 @@ def sync_color_settings(current_sce: bpy.types.Scene, loaded_sce: bpy.types.Scen
         pass
 
 
-def transfer_compositor(
-    from_sces: set[bpy.types.Scene],
-    context: bpy.types.Context,
-) -> None:
-    if not from_sces:
-        return
+def _pick_source_scene(from_sces: set[bpy.types.Scene]) -> bpy.types.Scene:
     from_sce = next(iter(from_sces))
     for ls in from_sces:
         if ls.name == "AC-Coloring":
-            from_sce = ls
-            break
+            return ls
+    return from_sce
+
+
+def _transfer_compositor_bl5(
+    from_sce: bpy.types.Scene,
+    context: bpy.types.Context,
+    *,
+    use_asset_color_space: bool,
+) -> None:
     sce = context.scene
-    context.view_layer.update()
+    from_tree = get_comp_node_tree(from_sce)
+    if not from_tree:
+        return
+    old_tree = sce.compositing_node_group
+    sce.compositing_node_group = from_tree
+    to_tree = sce.compositing_node_group
+    if old_tree is not None and old_tree != to_tree:
+        try:
+            if old_tree.users == 0:
+                bpy.data.node_groups.remove(old_tree)
+        except ReferenceError:
+            pass
+    r_layer = None
+    for n in to_tree.nodes:
+        if n.type == "R_LAYERS":
+            r_layer = n
+            break
+    if r_layer:
+        r_layer.scene = sce
+        r_layer.layer = context.view_layer.name
+    sync_color_settings(sce, from_sce, use_asset_color_space=use_asset_color_space)
+
+
+def _transfer_compositor_bl4(
+    from_sce: bpy.types.Scene,
+    context: bpy.types.Context,
+    *,
+    use_asset_color_space: bool,
+) -> None:
+    """Node-by-node copy without per-node ``view_layer.update()``."""
+    sce = context.scene
     from_tree = get_comp_node_tree(from_sce)
     to_tree = get_comp_node_tree(sce)
-    r_layer = None
-
-    if IS_BL5:
-        if not from_tree:
-            return
-        old_tree = sce.compositing_node_group
-        sce.compositing_node_group = from_tree
-        to_tree = sce.compositing_node_group
-        if old_tree is not None and old_tree != to_tree:
-            try:
-                if old_tree.users == 0:
-                    bpy.data.node_groups.remove(old_tree)
-            except ReferenceError:
-                pass
-        for n in to_tree.nodes:
-            if n.type == "R_LAYERS":
-                r_layer = n
-        if r_layer:
-            r_layer.scene = sce
-            r_layer.layer = context.view_layer.name
-        sync_color_settings(sce, from_sce)
+    if not from_tree or not to_tree:
         return
 
-    node_map = {}
+    node_map: dict[str, bpy.types.Node] = {}
+    r_layer = None
+
     for nf in from_tree.nodes:
         if nf.bl_idname == "NodeUndefined":
             logger.error("NodeUndefined: %s", nf.name)
@@ -81,6 +99,7 @@ def transfer_compositor(
                 nt.file_slots[i].use_node_format = nf.file_slots[i].use_node_format
         copy_node_properties(nf, nt)
         node_map[nf.name] = nt
+
     for link in from_tree.links:
         if link.from_node.bl_idname == "NodeUndefined" or link.to_node.bl_idname == "NodeUndefined":
             logger.error(
@@ -102,11 +121,31 @@ def transfer_compositor(
             logger.error("Socket not found: %s", link.to_socket.identifier)
             continue
         to_tree.links.new(tsocket, fsocket)
+
     if r_layer:
         r_layer.scene = sce
         r_layer.layer = context.view_layer.name
-    sync_color_settings(sce, from_sce)
+    sync_color_settings(sce, from_sce, use_asset_color_space=use_asset_color_space)
     copy_node_tree_drivers(from_sce, sce)
+
+
+def transfer_compositor(
+    from_sces: set[bpy.types.Scene],
+    context: bpy.types.Context,
+    *,
+    use_asset_color_space: bool = False,
+) -> None:
+    if not from_sces:
+        return
+    from_sce = _pick_source_scene(from_sces)
+    if IS_BL5:
+        _transfer_compositor_bl5(
+            from_sce, context, use_asset_color_space=use_asset_color_space
+        )
+        return
+    _transfer_compositor_bl4(
+        from_sce, context, use_asset_color_space=use_asset_color_space
+    )
 
 
 def reset_driver_with_scene_ref(an: bpy.types.AnimData, scenes: set[bpy.types.Scene]) -> None:

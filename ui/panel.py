@@ -1,12 +1,17 @@
 import bpy
 
-from ..preference import get_pref
-from ...utils.compat import IS_BL42_PLUS
-from ...utils.icon import Icon
-from ...utils.node import get_comp_node_tree, scene_uses_compositor
-from ...utils.paths import get_icons_dir
-from .constants import PANEL_TCTX
-from .operators import (
+from ..coloring.compositor.ui_nodes import (
+    draw_layout_panel,
+    iter_ui_coloring_nodes,
+    node_panel_id,
+)
+from ..coloring.constants import PANEL_TCTX
+from ..utils.compat import IS_BL42_PLUS
+from ..utils.icon import Icon
+from ..utils.node import get_comp_node_tree, scene_uses_compositor
+from ..utils.paths import get_icons_dir
+from ..preferences import get_pref
+from ..ops.operators import (
     ColoristaDeletePreset,
     ColoristaResetDefaults,
     ColoristaSavePreset,
@@ -14,11 +19,6 @@ from .operators import (
     ColoristaSwitchDevice,
     ColoristaSwitchPrecision,
     ColoristaSwitchPreset,
-)
-from .ui_nodes import (
-    draw_layout_panel,
-    iter_ui_coloring_nodes,
-    node_panel_id,
 )
 
 
@@ -68,7 +68,7 @@ class ColoringPanel(bpy.types.Panel):
                 first_panel = False
             if not body:
                 continue
-            from ...utils.compat import layout_separator
+            from ..utils.compat import layout_separator
 
             layout_separator(body)
             node.draw_buttons(context, body)

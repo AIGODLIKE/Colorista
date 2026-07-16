@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...utils.icon import Icon
-from ...utils.paths import get_asset_preset_dir, get_none_icon_path, get_resource_dir_locale
-from ...utils.watcher import FSWatcher
 from .constants import PRESET_NONE_ID
+from ..utils.icon import Icon
+from ..utils.paths import get_asset_preset_dir, get_none_icon_path, get_resource_dir_locale
+from ..utils.watcher import FSWatcher
+from .config import get_config
 
 _ICON_SUFFIXES = (".png", ".jpg", ".jpeg", ".tiff")
 
-# Cache: path_key -> (mtime_ns | None, items)
 _cache: dict[str, tuple[int | None, list]] = {}
 
 
@@ -137,7 +137,7 @@ def list_presets(asset_path: str, _context=None) -> list:
     if not asset_path:
         return [(PRESET_NONE_ID, "None", "No preset available", 0)]
     asset = Path(asset_path)
-    preset_dir = get_asset_preset_dir(asset)
+    preset_dir = get_asset_preset_dir(asset, custom_presets_root=get_config().custom_presets_root)
 
     def build():
         items = []

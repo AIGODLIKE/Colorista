@@ -13,8 +13,8 @@ def is_active() -> bool:
 
 
 def _has_ui_nodes(scene: bpy.types.Scene) -> bool:
-    from ...utils.node import get_comp_node_tree, scene_uses_compositor
-    from .ui_nodes import iter_ui_coloring_nodes
+    from .compositor.ui_nodes import iter_ui_coloring_nodes
+    from ..utils.node import get_comp_node_tree, scene_uses_compositor
 
     if not scene_uses_compositor(scene):
         return False
@@ -38,15 +38,15 @@ def ensure_coloring_content(context: bpy.types.Context | None = None) -> None:
     if _has_ui_nodes(scene):
         return
 
-    from ...utils.logger import logger
-    from . import api
+    from ..utils.logger import logger
+    from . import api as coloring
 
     try:
         asset = scene.colorista_prop.get_asset_path(context)
         if asset:
-            api.load(context, path=asset, force=True, cache=False)
+            coloring.load(context, path=asset, force=True, cache=False)
         else:
-            api.load(context, use_default=True, force=True, cache=False)
+            coloring.load(context, use_default=True, force=True, cache=False)
     except Exception:
         logger.exception("Failed to restore coloring compositor")
 
@@ -57,9 +57,9 @@ def _on_file_load(_scene):
     try:
         ensure_coloring_content(bpy.context)
         if bpy.context.scene.colorista_prop.enable_coloring:
-            from .history import update_history
+            from . import history
 
-            update_history()
+            history.refresh_from_disk()
     except AttributeError:
         pass
 
@@ -101,15 +101,23 @@ def activate() -> None:
         return
     _active = True
 
-    from .handlers import (
+    from .compositor.handlers import (
         DepsgraphPostHandler,
         RenderHandler,
+        configure_handlers,
         restore_render_device,
         switch_to_cpu_device,
         update_custom_vt,
         update_node_group,
     )
-    from ...utils.watcher import FSWatcher
+    from ..utils.watcher import FSWatcher
+    from .config import get_config
+
+    configure_handlers(
+        main_node_group_name=lambda: get_config().main_node_group_name,
+        enable_logging=lambda: get_config().enable_logging,
+        force_use_cpu=lambda: get_config().force_use_cpu_render_image,
+    )
 
     DepsgraphPostHandler.add(update_node_group)
     DepsgraphPostHandler.add(lambda scene: update_custom_vt())
@@ -121,13 +129,13 @@ def activate() -> None:
 
 
 def deactivate(context: bpy.types.Context | None = None, *, clear_tree: bool = False) -> None:
-    """Tear down handlers. Clear compositor only when *clear_tree* is True (user disabled coloring)."""
+    """Tear down handlers. Clear compositor only when *clear_tree* is True."""
     global _active
-    from .viewport import clear_compositor, set_viewport_shading
+    from .compositor.viewport import clear_compositor, set_viewport_shading
 
     if _active:
-        from .handlers import DepsgraphPostHandler, RenderHandler
-        from ...utils.watcher import FSWatcher
+        from .compositor.handlers import DepsgraphPostHandler, RenderHandler
+        from ..utils.watcher import FSWatcher
 
         DepsgraphPostHandler.unregister()
         RenderHandler.unregister()
@@ -142,7 +150,7 @@ def deactivate(context: bpy.types.Context | None = None, *, clear_tree: bool = F
         except Exception:
             pass
 
-    from ...utils.timer import Timer
+    from ..utils.timer import Timer
 
     Timer.unreg()
     session.clear_loaded_preset()
@@ -154,7 +162,6 @@ def register():
 
 
 def unregister():
-    # Uninstall / reload: stop handlers only — do not clear compositor.
     try:
         deactivate(bpy.context, clear_tree=False)
     except Exception:

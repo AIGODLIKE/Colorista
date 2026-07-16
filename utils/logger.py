@@ -17,11 +17,12 @@ FMTDICT = {
 def _get_logfile() -> Path:
     try:
         import bpy
-        parts = __package__.rsplit(".", 1)
-        root = parts[0] if parts else __package__
+
+        # Colorista.infra → Colorista (or bl_ext.*.Colorista)
+        root = __package__.rsplit(".", 1)[0]
         return Path(bpy.utils.extension_path_user(root)).joinpath("logs", "runtime.log")
     except Exception:
-        return Path(__file__).resolve().parent.joinpath("logs", "runtime.log")
+        return Path(__file__).resolve().parent.parent.joinpath("logs", "runtime.log")
 
 
 class KcHandler(logging.StreamHandler):

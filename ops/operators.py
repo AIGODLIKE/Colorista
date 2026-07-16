@@ -1,21 +1,22 @@
-"""Thin RNA operators — business logic lives in ``api`` / ``load`` / ``preset_io``."""
+"""Thin RNA operators — business logic lives in ``coloring.api``."""
 
 from pathlib import Path
 
 import bpy
 
-from ..i18n import _T
-from ...utils.logger import logger
-from ...utils.node import scene_uses_compositor
-from ...utils.paths import (
-    get_asset_preset_dir,
-    is_under_user_presets_root,
-    is_user_preset_file,
-)
-from . import api
-from . import catalog
-from .constants import OPS_TCTX, PRESET_NONE_ID
-from .preset_io import save_compositor_values_json
+from ..coloring.constants import OPS_TCTX, PRESET_NONE_ID
+from ..coloring.preset.io import save_compositor_values_json
+from ..src.translate import _T
+from ..utils.logger import logger
+from ..utils.node import scene_uses_compositor
+from ..utils.paths import get_asset_preset_dir, is_under_user_presets_root, is_user_preset_file
+from ..coloring import catalog
+from ..coloring import api as coloring
+from ..coloring.config import get_config
+
+
+def _custom_presets_root() -> str | None:
+    return get_config().custom_presets_root
 
 
 def _poll_coloring_enabled(cls, context: bpy.types.Context) -> bool:
@@ -59,7 +60,9 @@ class ColoristaSavePreset(bpy.types.Operator):
         preset_name = prop.preset_save_name
         if self.preset:
             return Path(self.preset).with_suffix(".json")
-        return get_asset_preset_dir(asset).joinpath(preset_name).with_suffix(".json")
+        return get_asset_preset_dir(
+            asset, custom_presets_root=_custom_presets_root()
+        ).joinpath(preset_name).with_suffix(".json")
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
         if not context.scene.colorista_prop.get_asset_path(context):
@@ -70,7 +73,7 @@ class ColoristaSavePreset(bpy.types.Operator):
             return {"CANCELLED"}
         wm = context.window_manager
         path = self.get_preset_path(context)
-        if not is_under_user_presets_root(path):
+        if not is_under_user_presets_root(path, custom_presets_root=_custom_presets_root()):
             self.report({"ERROR"}, _T("Preset path is outside the user presets folder"))
             return {"CANCELLED"}
         if path and path.exists() and self.popup:
@@ -81,7 +84,7 @@ class ColoristaSavePreset(bpy.types.Operator):
         path = self.get_preset_path(context)
         asset = context.scene.colorista_prop.get_asset_path(context)
         self.preset = ""
-        if not is_under_user_presets_root(path):
+        if not is_under_user_presets_root(path, custom_presets_root=_custom_presets_root()):
             self.report({"ERROR"}, _T("Preset path is outside the user presets folder"))
             return {"CANCELLED"}
         try:
@@ -90,7 +93,9 @@ class ColoristaSavePreset(bpy.types.Operator):
             logger.exception("Failed to save preset")
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
-        catalog.invalidate(get_asset_preset_dir(asset))
+        catalog.invalidate(
+            get_asset_preset_dir(asset, custom_presets_root=_custom_presets_root())
+        )
         return {"FINISHED"}
 
 
@@ -111,7 +116,7 @@ class ColoristaDeletePreset(bpy.types.Operator):
         if preset == PRESET_NONE_ID:
             cls.poll_message_set(_T("Select a preset to delete"))
             return False
-        if not is_user_preset_file(preset):
+        if not is_user_preset_file(preset, custom_presets_root=_custom_presets_root()):
             cls.poll_message_set(_T("Only user-saved presets can be deleted"))
             return False
         return True
@@ -128,7 +133,7 @@ class ColoristaDeletePreset(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         path = Path(context.scene.colorista_prop.get_preset_path(context))
-        if not is_user_preset_file(path):
+        if not is_user_preset_file(path, custom_presets_root=_custom_presets_root()):
             self.report({"ERROR"}, _T("Only user-saved presets can be deleted"))
             return {"CANCELLED"}
 
@@ -161,8 +166,8 @@ class ColoristaSwitchPrecision(bpy.types.Operator):
     bl_idname = "wm.colorista_switch_precision"
     bl_description = "Toggle compositor precision between Auto and Full"
     bl_label = "Switch precision"
-    bl_translation_context = OPS_TCTX
     bl_options = {"REGISTER", "UNDO"}
+    bl_translation_context = OPS_TCTX
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
@@ -189,7 +194,7 @@ class ColoristaResetDefaults(bpy.types.Operator):
         return _poll_coloring_enabled(cls, context)
 
     def execute(self, context: bpy.types.Context):
-        if not api.reset_to_defaults(context, reporter=self.report):
+        if not coloring.reset_to_defaults(context, reporter=self.report):
             self.report({"ERROR"}, _T("No asset selected"))
             return {"CANCELLED"}
         return {"FINISHED"}
@@ -216,7 +221,7 @@ class ColoristaSwitchAsset(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         delta = -1 if self.direction == "PREV" else 1
-        if not api.switch_asset(context, delta):
+        if not coloring.switch_asset(context, delta):
             return {"CANCELLED"}
         return {"FINISHED"}
 
@@ -242,7 +247,7 @@ class ColoristaSwitchPreset(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         delta = -1 if self.direction == "PREV" else 1
-        ok, message = api.switch_preset(context, delta)
+        ok, message = coloring.switch_preset(context, delta)
         if not ok:
             self.report({"INFO"}, message)
             return {"CANCELLED"}
@@ -266,7 +271,7 @@ class CompositorNodeTreeImport(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         preset = self.preset or None
-        if api.load(
+        if coloring.load(
             context,
             preset=preset,
             use_default=self.use_default,

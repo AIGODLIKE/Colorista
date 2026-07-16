@@ -1,8 +1,18 @@
-import bpy
+"""Shared utilities: paths, timers, icons, logging (no preferences / UI imports)."""
+
+from . import timer, watcher
 
 modules = (
     "timer",
     "watcher",
 )
 
-register, unregister = bpy.utils.register_submodule_factory(__package__, modules)
+
+def register():
+    timer.register()
+    watcher.register()
+
+
+def unregister():
+    watcher.unregister()
+    timer.unregister()
