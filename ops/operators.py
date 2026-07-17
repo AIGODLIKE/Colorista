@@ -23,10 +23,10 @@ def _custom_presets_root() -> str | None:
 def _poll_coloring_enabled(cls, context: bpy.types.Context) -> bool:
     try:
         if not context.scene.colorista_prop.enable_coloring:
-            cls.poll_message_set(_T("Enable coloring first"))
+            cls.poll_message_set(_T("Enable Coloring first"))
             return False
     except AttributeError:
-        cls.poll_message_set(_T("Enable coloring first"))
+        cls.poll_message_set(_T("Enable Coloring first"))
         return False
     return True
 

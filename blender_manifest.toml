@@ -23,7 +23,7 @@ copyright = [
 ]
 
 [permissions]
-files = "Import compositor presets and cache files"
+files = "Read/write presets, cache, and optional logs"
 
 [build]
 paths_exclude_pattern = [

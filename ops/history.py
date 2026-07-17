@@ -43,17 +43,26 @@ class ColoristaDeleteHistory(bpy.types.Operator):
 
     file: bpy.props.StringProperty(default="", options={"HIDDEN", "SKIP_SAVE"})
 
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        try:
+            if not context.scene.colorista_prop.enable_coloring:
+                cls.poll_message_set(_T("Enable Coloring first"))
+                return False
+        except AttributeError:
+            cls.poll_message_set(_T("Enable Coloring first"))
+            return False
+        return True
+
     def execute(self, context: bpy.types.Context):
         if not self.file:
             return {"CANCELLED"}
         file = Path(self.file)
-        if file.is_dir():
-            return {"CANCELLED"}
-        if file.suffix.lower() != ".json":
+        if file.is_dir() or file.suffix.lower() != ".json":
             return {"CANCELLED"}
         if not history_svc.remove_entry(context, file):
             self.report({"WARNING"}, _T("History file not found"))
-            return {"FINISHED"}
+            return {"CANCELLED"}
         return {"FINISHED"}
 
 

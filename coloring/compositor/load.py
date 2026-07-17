@@ -193,7 +193,7 @@ def apply_preset(
         return False
     asset_path = resolve_asset_path(data.get("asset", ""))
     if asset_path is None or not asset_path.exists():
-        _report(reporter, {"ERROR"}, _T("Preset not found: {}").format(data.get("asset", "")))
+        _report(reporter, {"ERROR"}, _T("Asset not found: {}").format(data.get("asset", "")))
         return False
 
     same_asset = (
