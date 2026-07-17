@@ -4,6 +4,7 @@ from pathlib import Path
 from ..coloring.constants import OPS_TCTX
 from ..src.translate import _T
 from ..coloring import history as history_svc
+from ..utils.icon import Icon
 from .operators import CompositorNodeTreeImport
 
 
@@ -23,10 +24,14 @@ class COLORISTA_HISTORY_UL_UIList(bpy.types.UIList):
     ):
         row = layout.row(align=True)
         row.label(text=item.name)
-        op = row.operator(CompositorNodeTreeImport.bl_idname, text="", icon="TIME")
+        op = row.operator(
+            CompositorNodeTreeImport.bl_idname, text="", icon=Icon.ui("TIME")
+        )
         op.preset = item.file
         op.no_cache = True
-        row.operator(ColoristaDeleteHistory.bl_idname, text="", icon="X").file = item.file
+        row.operator(
+            ColoristaDeleteHistory.bl_idname, text="", icon=Icon.ui("X")
+        ).file = item.file
 
 
 class ColoristaDeleteHistory(bpy.types.Operator):

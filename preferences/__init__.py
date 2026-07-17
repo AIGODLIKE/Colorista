@@ -135,7 +135,11 @@ class Preferences(bpy.types.AddonPreferences):
         active_folder = resolve_user_presets_root(get_config().custom_presets_root).as_posix()
         row = box.row(align=True)
         row.label(text=default_folder, translate=False)
-        row.operator("wm.path_open", text="", icon="FILE_FOLDER").filepath = active_folder
+        from ..utils.icon import Icon
+
+        row.operator(
+            "wm.path_open", text="", icon=Icon.ui("FILE_FOLDER")
+        ).filepath = active_folder
         box.prop(self, "use_custom_presets_path")
         if self.use_custom_presets_path:
             box.prop(self, "presets_path")

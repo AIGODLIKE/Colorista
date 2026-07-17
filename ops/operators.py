@@ -7,6 +7,7 @@ import bpy
 from ..coloring.constants import OPS_TCTX, PRESET_NONE_ID
 from ..coloring.preset.io import save_compositor_values_json
 from ..src.translate import _T
+from ..utils.icon import Icon
 from ..utils.logger import logger
 from ..utils.node import scene_uses_compositor
 from ..utils.paths import get_asset_preset_dir, is_under_user_presets_root, is_user_preset_file
@@ -51,7 +52,10 @@ class ColoristaSavePreset(bpy.types.Operator):
         layout = self.layout
         path = self.get_preset_path(context)
         layout.alert = True
-        layout.label(text=_T("Overwrite preset: {}?").format(path.stem), icon="QUESTION")
+        layout.label(
+            text=_T("Overwrite preset: {}?").format(path.stem),
+            icon=Icon.ui("QUESTION"),
+        )
 
     def get_preset_path(self, context: bpy.types.Context | None = None):
         context = context or bpy.context
@@ -126,7 +130,10 @@ class ColoristaDeletePreset(bpy.types.Operator):
         asset = Path(context.scene.colorista_prop.get_asset_path(context)).stem
         preset = Path(context.scene.colorista_prop.get_preset_path(context)).stem
         layout.alert = True
-        layout.label(text=_T("Delete {}'s preset: {}?").format(asset, preset), icon="TRASH")
+        layout.label(
+            text=_T("Delete {}'s preset: {}?").format(asset, preset),
+            icon=Icon.ui("TRASH"),
+        )
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
         return context.window_manager.invoke_props_dialog(self, width=200)
