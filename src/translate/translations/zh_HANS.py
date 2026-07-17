@@ -10,7 +10,7 @@ translations = (
     ("Default", "默认", PROP_TCTX),
     ("default", "默认", PROP_TCTX),
     ("Preset", "预设", PROP_TCTX),
-    ("Save Name", "存储名", PROP_TCTX),
+    ("Preset Name", "预设名称", PROP_TCTX),
     ("None", "无", PROP_TCTX),
     ("No preset available", "无可用预设", PROP_TCTX),
     ("Use Asset Color Management", "使用资产色彩管理", PROP_TCTX),
@@ -27,9 +27,9 @@ translations = (
     ),
     ("Enable Logging", "启用日志", PROP_TCTX),
     ("Main Node Group Name", "主节点组名称", PROP_TCTX),
-    ("Use custom presets folder", "使用自定义预设文件夹", PROP_TCTX),
+    ("Use Custom Presets Folder", "使用自定义预设文件夹", PROP_TCTX),
     ("Save user presets to a custom folder instead of the default", "将用户预设保存到自定义文件夹，而不是默认位置", PROP_TCTX),
-    ("Custom presets folder", "自定义预设文件夹", PROP_TCTX),
+    ("Custom Presets Folder", "自定义预设文件夹", PROP_TCTX),
     ("Folder for user-saved presets when custom path is enabled", "启用自定义路径时用于存放用户预设的文件夹", PROP_TCTX),
     # Property descriptions (msgctxt=None — same rule as operator bl_description)
     ("Enable Coloring", "开启调色", None),
@@ -52,7 +52,7 @@ translations = (
     ("Switch asset", "切换资产", OPS_TCTX),
     ("Switch preset", "切换预设", OPS_TCTX),
     ("Reset to defaults", "重置为默认", OPS_TCTX),
-    ("Import Node Tree", "导入合成节点树", OPS_TCTX),
+    ("Import node tree", "导入合成节点树", OPS_TCTX),
     ("Toggle Viewport Compositor", "切换视口合成", OPS_TCTX),
     ("Colorista gizmos", "调色 Gizmo", OPS_TCTX),
     # Operator enum items (OPS_TCTX)
@@ -76,7 +76,7 @@ translations = (
     # Messages
     ("Loaded compositor: {}", "加载成功: {}"),
     ("Overwrite preset: {}?", "是否覆盖 {}?"),
-    ("Delete {}'s preset: {}?", "是否删除 {} 的预设: {}?"),
+    ('Delete preset "{}" for asset "{}"?', '是否删除预设 "{}"（资产 "{}"）？'),
     ("History file not found", "历史文件未找到"),
     ("Enable coloring first", "请先开启调色"),
     ("Compositor nodes are not enabled for this scene", "当前场景未启用合成节点"),

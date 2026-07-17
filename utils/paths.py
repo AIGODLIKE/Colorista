@@ -76,7 +76,7 @@ def get_resource_dir_locale() -> Path:
     if _dir_has_assets(preferred):
         result = preferred
     else:
-        fallback = get_locale_dir("CN")
+        fallback = get_locale_dir("EN")
         result = fallback if _dir_has_assets(fallback) else preferred
     _locale_resource_dir = (suffix, result)
     return result

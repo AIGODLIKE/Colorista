@@ -132,7 +132,7 @@ class ColoristaDeletePreset(bpy.types.Operator):
         preset = Path(context.scene.colorista_prop.get_preset_path(context)).stem
         layout.alert = True
         layout.label(
-            text=_T("Delete {}'s preset: {}?").format(asset, preset),
+            text=_T('Delete preset "{}" for asset "{}"?').format(preset, asset),
             icon=Icon.ui("TRASH"),
         )
 
@@ -145,7 +145,11 @@ class ColoristaDeletePreset(bpy.types.Operator):
             self.report({"ERROR"}, _T("Only user-saved presets can be deleted"))
             return {"CANCELLED"}
 
-        path.unlink()
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as e:
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
         catalog.invalidate(path.parent)
         return {"FINISHED"}
 
@@ -265,7 +269,7 @@ class ColoristaSwitchPreset(bpy.types.Operator):
 class CompositorNodeTreeImport(bpy.types.Operator):
     bl_idname = "wm.colorista_compositor_import"
     bl_description = "Import a compositor node tree from a file"
-    bl_label = "Import Node Tree"
+    bl_label = "Import node tree"
     bl_translation_context = OPS_TCTX
     bl_options = {"REGISTER", "UNDO"}
 

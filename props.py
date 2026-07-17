@@ -113,7 +113,7 @@ class Props(bpy.types.PropertyGroup):
     )
 
     preset_save_name: bpy.props.StringProperty(
-        name="Save Name",
+        name="Preset Name",
         default="",
         translation_context=PROP_TCTX,
     )

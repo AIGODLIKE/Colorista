@@ -104,7 +104,7 @@ class Preferences(bpy.types.AddonPreferences):
         catalog.invalidate()
 
     use_custom_presets_path: bpy.props.BoolProperty(
-        name="Use custom presets folder",
+        name="Use Custom Presets Folder",
         description="Save user presets to a custom folder instead of the default",
         default=False,
         update=update_presets_folder,
@@ -112,7 +112,7 @@ class Preferences(bpy.types.AddonPreferences):
     )
 
     presets_path: bpy.props.StringProperty(
-        name="Custom presets folder",
+        name="Custom Presets Folder",
         description="Folder for user-saved presets when custom path is enabled",
         subtype="DIR_PATH",
         default="",
