@@ -1,4 +1,4 @@
-"""History service: indexed cache, atomic writes, deferred flush, dedupe."""
+"""History service: baseline-gated snapshots, indexed cache, sync commit."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import hashlib
 import json
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -17,12 +17,10 @@ from .preset import io as preset_io
 from ..utils.logger import logger
 from ..utils.node import scene_uses_compositor
 from ..utils.paths import get_user_cache_dir
-from ..utils.timer import Timer
 from .config import get_config
 
 INDEX_NAME = "index.json"
 INDEX_VERSION = 1
-THROTTLE_SECONDS = 1.0
 
 
 @dataclass
@@ -37,15 +35,18 @@ class HistoryEntry:
 
 @dataclass
 class _PendingSnapshot:
-    scene_name: str
-    asset_path: str
     data: dict[str, Any]
     content_hash: str
-    created_at: float = field(default_factory=time.monotonic)
+    asset_path: str
 
 
 _pending: _PendingSnapshot | None = None
-_flush_scheduled = False
+_baseline_hash: str | None = None
+
+
+def clear_baseline() -> None:
+    global _baseline_hash
+    _baseline_hash = None
 
 
 def _index_path(cache_dir: Path | None = None) -> Path:
@@ -186,7 +187,7 @@ def _trim_entries(entries: list[HistoryEntry], limit: int) -> list[HistoryEntry]
 
 
 def sync_ui_list(context: bpy.types.Context | None = None, *, entries: list[HistoryEntry] | None = None) -> None:
-    """Incrementally sync Scene.history_items to the index (full replace only here)."""
+    """Mirror index entries to Scene.history_items (does not delete disk files)."""
     try:
         context = context or bpy.context
         prop = context.scene.colorista_prop
@@ -194,8 +195,6 @@ def sync_ui_list(context: bpy.types.Context | None = None, *, entries: list[Hist
         return
     if entries is None:
         entries = _load_index()
-    cfg = get_config()
-    entries = _trim_entries(entries, cfg.cache_current_cache_count)
     try:
         prop.history_items.clear()
         for entry in entries:
@@ -207,9 +206,8 @@ def sync_ui_list(context: bpy.types.Context | None = None, *, entries: list[Hist
 
 
 def refresh_from_disk(context: bpy.types.Context | None = None) -> None:
-    """Rebuild index from files and refresh UI (load_post / pref count change)."""
+    """Rebuild index from files, trim to limit, and refresh UI."""
     cache_dir = get_user_cache_dir()
-    _cleanup_legacy_blend(cache_dir)
     entries = _rebuild_index_from_files(cache_dir)
     cfg = get_config()
     entries = _trim_entries(entries, cfg.cache_current_cache_count)
@@ -232,6 +230,20 @@ def prepend_ui_item(context: bpy.types.Context | None, entry: HistoryEntry) -> N
             prop.history_items.remove(len(prop.history_items) - 1)
     except Exception as e:
         logger.error("Prepend history UI failed: %s", e)
+
+
+def _replace_top_ui_item(context: bpy.types.Context | None, entry: HistoryEntry) -> None:
+    try:
+        context = context or bpy.context
+        prop = context.scene.colorista_prop
+        if not prop.history_items:
+            prepend_ui_item(context, entry)
+            return
+        item = prop.history_items[0]
+        item.name = entry.name
+        item.file = entry.file
+    except Exception as e:
+        logger.error("Replace history UI failed: %s", e)
 
 
 def remove_entry(context: bpy.types.Context | None, file: Path | str) -> bool:
@@ -274,55 +286,74 @@ def remove_entry(context: bpy.types.Context | None, file: Path | str) -> bool:
     return removed_from_index or removed_from_ui
 
 
-def capture_pending_snapshot(
+def set_baseline_from_scene(scene: bpy.types.Scene, asset_path: Path | str | None) -> None:
+    """Record post-load dump hash so unchanged browsing does not create history."""
+    global _baseline_hash
+    if not asset_path or not scene_uses_compositor(scene):
+        _baseline_hash = None
+        return
+    try:
+        data = preset_io.dump_scene_preset(scene, asset_path)
+        _baseline_hash = _content_hash(data)
+    except Exception:
+        logger.exception("Failed to set history baseline")
+        _baseline_hash = None
+
+
+def begin_capture(
     context: bpy.types.Context,
     scene: bpy.types.Scene,
     asset_path: Path | str,
-) -> None:
-    """Build an in-memory snapshot before a load (no disk I/O)."""
+) -> bool:
+    """Dump pre-load state if dirty vs baseline. Returns True when a pending snap exists."""
     global _pending
+    _pending = None
     cfg = get_config()
     if not cfg.cache_current_compositor:
-        _pending = None
-        return
+        return False
     if not scene_uses_compositor(scene):
-        return
+        return False
     try:
         data = preset_io.dump_scene_preset(scene, asset_path)
     except Exception:
         logger.exception("Failed to capture history snapshot")
-        return
+        return False
     digest = _content_hash(data)
+    if _baseline_hash is not None and digest == _baseline_hash:
+        return False
     _pending = _PendingSnapshot(
-        scene_name=scene.name,
-        asset_path=str(asset_path),
         data=data,
         content_hash=digest,
+        asset_path=str(asset_path),
     )
+    return True
 
 
-def schedule_flush(context: bpy.types.Context | None = None) -> None:
-    """Defer writing the pending snapshot to disk."""
-    global _flush_scheduled
-    if _pending is None:
-        return
-    if _flush_scheduled:
-        return
-    _flush_scheduled = True
-    Timer.put(_flush_pending)
+def discard_capture() -> None:
+    global _pending
+    _pending = None
 
 
-def _flush_pending() -> None:
-    global _pending, _flush_scheduled
-    _flush_scheduled = False
+def commit_capture(context: bpy.types.Context | None = None) -> None:
+    """Write the pending snapshot to disk synchronously."""
+    global _pending
     snap = _pending
     _pending = None
     if snap is None:
         return
     try:
-        _commit_snapshot(snap, bpy.context)
+        _commit_snapshot(snap, context or bpy.context)
     except Exception:
-        logger.exception("Deferred history flush failed")
+        logger.exception("History commit failed")
+
+
+def _new_history_path(cache_dir: Path) -> Path:
+    name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    path = cache_dir.joinpath(f"{name}.json")
+    if path.exists():
+        name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
+        path = cache_dir.joinpath(f"{name}.json")
+    return path
 
 
 def _commit_snapshot(snap: _PendingSnapshot, context: bpy.types.Context) -> None:
@@ -331,21 +362,43 @@ def _commit_snapshot(snap: _PendingSnapshot, context: bpy.types.Context) -> None
         return
     cache_dir = get_user_cache_dir()
     entries = _load_index(cache_dir)
+    snap_asset = str(snap.data.get("asset") or snap.asset_path or "")
+
     if entries and entries[0].hash == snap.content_hash:
         return
-    # Throttle: replace a very recent same-asset pending write by skipping near-duplicates.
+
     now = time.time()
-    if entries and entries[0].asset == snap.data.get("asset", "") and (now - entries[0].mtime) < THROTTLE_SECONDS:
-        if entries[0].hash == snap.content_hash:
+    merge_window = max(0.0, float(cfg.cache_history_merge_seconds))
+    replace_top = (
+        bool(entries)
+        and merge_window > 0
+        and entries[0].asset == snap_asset
+        and (now - entries[0].mtime) < merge_window
+    )
+
+    if replace_top:
+        old = entries[0]
+        path = Path(old.file)
+        try:
+            _atomic_write_json(path, snap.data)
+        except OSError as e:
+            logger.error("Failed to replace history file: %s", e)
             return
+        entry = HistoryEntry(
+            id=old.id,
+            file=path.as_posix(),
+            name=old.name,
+            asset=snap_asset,
+            hash=snap.content_hash,
+            mtime=now,
+        )
+        entries[0] = entry
+        entries = _trim_entries(entries, cfg.cache_current_cache_count)
+        _save_index(entries, cache_dir)
+        _replace_top_ui_item(context, entry)
+        return
 
-    name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    # Avoid collisions when multiple snaps land in the same second.
-    path = cache_dir.joinpath(f"{name}.json")
-    if path.exists():
-        name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
-        path = cache_dir.joinpath(f"{name}.json")
-
+    path = _new_history_path(cache_dir)
     try:
         _atomic_write_json(path, snap.data)
     except OSError as e:
@@ -356,9 +409,9 @@ def _commit_snapshot(snap: _PendingSnapshot, context: bpy.types.Context) -> None
         id=path.stem,
         file=path.as_posix(),
         name=path.stem,
-        asset=str(snap.data.get("asset") or ""),
+        asset=snap_asset,
         hash=snap.content_hash,
-        mtime=time.time(),
+        mtime=now,
     )
     entries.insert(0, entry)
     entries = _trim_entries(entries, cfg.cache_current_cache_count)
@@ -371,21 +424,3 @@ def apply_limit_change(context: bpy.types.Context | None = None) -> None:
     entries = _trim_entries(_load_index(cache_dir), get_config().cache_current_cache_count)
     _save_index(entries, cache_dir)
     sync_ui_list(context, entries=entries)
-
-
-# Back-compat aliases used during migration
-def update_history(context=None) -> None:
-    refresh_from_disk(context)
-
-
-def append_history_item(context, file: Path) -> None:
-    entry = HistoryEntry(id=file.stem, file=file.as_posix(), name=file.stem, mtime=time.time())
-    entries = _load_index()
-    entries.insert(0, entry)
-    entries = _trim_entries(entries, get_config().cache_current_cache_count)
-    _save_index(entries)
-    prepend_ui_item(context, entry)
-
-
-def remove_history_item(context, file: Path | str) -> None:
-    remove_entry(context, file)

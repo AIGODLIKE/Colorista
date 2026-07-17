@@ -234,7 +234,6 @@ def load(
     path: str | Path | None = None,
     preset: str | Path | None = None,
     use_default: bool = False,
-    cache: bool = True,
     force: bool = False,
     reporter=None,
     use_asset_color_space: bool = False,
@@ -242,9 +241,8 @@ def load(
 ) -> bool:
     """Load a compositor asset or preset into the current scene.
 
-    *cache* is unused here; history is orchestrated by ``coloring.api``.
+    History is orchestrated by ``coloring.api``, not this module.
     """
-    del cache  # handled by coloring.api facade
     target = path if path is not None else preset
 
     if use_default:

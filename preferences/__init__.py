@@ -65,6 +65,15 @@ class Preferences(bpy.types.AddonPreferences):
         translation_context=PROP_TCTX,
     )
 
+    cache_history_merge_seconds: bpy.props.IntProperty(
+        name="History Merge Window",
+        description="Within this many seconds, dirty history for the same asset replaces the latest entry instead of adding a new one",
+        default=30,
+        min=0,
+        max=600,
+        translation_context=PROP_TCTX,
+    )
+
     force_use_cpu_render_image: bpy.props.BoolProperty(
         name="Force Use CPU Render Image",
         default=False,
@@ -116,6 +125,7 @@ class Preferences(bpy.types.AddonPreferences):
         row = layout.row()
         row.prop(self, "cache_current_compositor", toggle=True)
         row.prop(self, "cache_current_cache_count")
+        layout.prop(self, "cache_history_merge_seconds")
 
         layout.separator()
 

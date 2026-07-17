@@ -54,6 +54,34 @@ def _sync_asset_enum(context: bpy.types.Context, asset_path: Path) -> None:
             prop.asset = asset_id
 
 
+def _resolve_history_asset(context: bpy.types.Context) -> Path | str | None:
+    sce = context.scene
+    asset = None
+    try:
+        asset = sce.colorista_prop.get_asset_path(context)
+    except AttributeError:
+        pass
+    if not asset and session.last_loaded_asset:
+        asset = session.last_loaded_asset
+    return asset
+
+
+def _capture_history(context: bpy.types.Context) -> bool:
+    sce = context.scene
+    if not scene_uses_compositor(sce):
+        return False
+    asset = _resolve_history_asset(context)
+    if not asset:
+        return False
+    return history.begin_capture(context, sce, asset)
+
+
+def _refresh_baseline(context: bpy.types.Context) -> None:
+    sce = context.scene
+    asset = _resolve_history_asset(context)
+    history.set_baseline_from_scene(sce, asset)
+
+
 def enable(context: bpy.types.Context) -> bool:
     """Enable coloring: load default preset and activate handlers."""
     if not load(context, use_default=True, cache=False):
@@ -77,38 +105,28 @@ def load(
     reporter=None,
 ) -> bool:
     cfg = get_config()
+    captured = False
     if cache and cfg.cache_current_compositor:
-        _capture_history(context)
+        captured = _capture_history(context)
     ok = load_mod.load(
         context,
         path=path,
         preset=preset,
         use_default=use_default,
-        cache=False,
         force=force,
         reporter=reporter,
         use_asset_color_space=cfg.use_asset_color_space_pref,
         sync_asset_enum=_sync_asset_enum,
     )
-    if ok and cache and cfg.cache_current_compositor:
-        history.schedule_flush(context)
+    if ok:
+        if captured:
+            history.commit_capture(context)
+        else:
+            history.discard_capture()
+        _refresh_baseline(context)
+    else:
+        history.discard_capture()
     return ok
-
-
-def _capture_history(context: bpy.types.Context) -> None:
-    sce = context.scene
-    if not scene_uses_compositor(sce):
-        return
-    asset = None
-    try:
-        asset = sce.colorista_prop.get_asset_path(context)
-    except AttributeError:
-        pass
-    if not asset and session.last_loaded_asset:
-        asset = session.last_loaded_asset
-    if not asset:
-        return
-    history.capture_pending_snapshot(context, sce, asset)
 
 
 def switch_asset(context: bpy.types.Context, delta: int) -> bool:
