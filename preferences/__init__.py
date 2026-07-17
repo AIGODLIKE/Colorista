@@ -46,7 +46,7 @@ class Preferences(bpy.types.AddonPreferences):
     )
 
     cache_current_compositor: bpy.props.BoolProperty(
-        name="Cache Compositor",
+        name="Cache Compositor State",
         default=True,
         translation_context=PROP_TCTX,
     )
@@ -133,6 +133,7 @@ class Preferences(bpy.types.AddonPreferences):
         row.prop(self, "cache_current_compositor", toggle=True)
         row.prop(self, "cache_current_cache_count")
         layout.prop(self, "cache_history_merge_seconds")
+        layout.prop(self, "force_use_cpu_render_image")
 
         layout.separator()
 

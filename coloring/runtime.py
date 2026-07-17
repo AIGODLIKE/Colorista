@@ -127,7 +127,6 @@ def activate() -> None:
         update_custom_vt,
         update_node_group,
     )
-    from ..utils.watcher import FSWatcher
     from .config import get_config
 
     configure_handlers(
@@ -137,12 +136,11 @@ def activate() -> None:
     )
 
     DepsgraphPostHandler.add(update_node_group)
-    DepsgraphPostHandler.add(lambda scene: update_custom_vt())
+    DepsgraphPostHandler.add(update_custom_vt)
     DepsgraphPostHandler.register()
     RenderHandler.add(switch_to_cpu_device, "pre")
     RenderHandler.add(restore_render_device, "complete")
     RenderHandler.register()
-    FSWatcher.enable()
 
 
 def deactivate(context: bpy.types.Context | None = None, *, clear_tree: bool = False) -> None:
@@ -152,11 +150,9 @@ def deactivate(context: bpy.types.Context | None = None, *, clear_tree: bool = F
 
     if _active:
         from .compositor.handlers import DepsgraphPostHandler, RenderHandler
-        from ..utils.watcher import FSWatcher
 
         DepsgraphPostHandler.unregister()
         RenderHandler.unregister()
-        FSWatcher.disable()
         _active = False
 
     if clear_tree:

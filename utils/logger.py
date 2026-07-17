@@ -14,7 +14,8 @@ FMTDICT = {
 }
 
 
-def _get_logfile() -> Path:
+def _get_logfile() -> Path | None:
+    """User extension data only; never write into the install tree."""
     try:
         import bpy
 
@@ -22,7 +23,7 @@ def _get_logfile() -> Path:
         root = __package__.rsplit(".", 1)[0]
         return Path(bpy.utils.extension_path_user(root)).joinpath("logs", "runtime.log")
     except Exception:
-        return Path(__file__).resolve().parent.parent.joinpath("logs", "runtime.log")
+        return None
 
 
 class KcHandler(logging.StreamHandler):
@@ -89,11 +90,6 @@ _handlers_attached = False
 
 def _attach_handlers(log: KcLogger) -> None:
     global _handlers_attached
-    fmter = logging.Formatter('[%(levelname)s]:%(filename)s>%(lineno)s: %(message)s')
-    logfile = _get_logfile()
-    logfile.parent.mkdir(parents=True, exist_ok=True)
-    dfh = handlers.TimedRotatingFileHandler(filename=logfile, when='D', backupCount=2)
-    dfh.setFormatter(fmter)
     kc_filter = KcFilter()
     ch = KcHandler()
     ch.setFormatter(logging.Formatter('[%(name)s-%(levelname)s]: %(message)s', "%H:%M:%S"))
@@ -104,7 +100,21 @@ def _attach_handlers(log: KcLogger) -> None:
             handler.close()
         except (OSError, ValueError):
             pass
-    log.addHandler(dfh)
+    logfile = _get_logfile()
+    if logfile is not None:
+        try:
+            logfile.parent.mkdir(parents=True, exist_ok=True)
+            dfh = handlers.TimedRotatingFileHandler(
+                filename=logfile, when="D", backupCount=2
+            )
+            dfh.setFormatter(
+                logging.Formatter(
+                    "[%(levelname)s]:%(filename)s>%(lineno)s: %(message)s"
+                )
+            )
+            log.addHandler(dfh)
+        except OSError:
+            pass
     log.addHandler(ch)
     _handlers_attached = True
 

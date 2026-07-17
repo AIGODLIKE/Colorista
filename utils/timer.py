@@ -41,8 +41,6 @@ class Timer:
                 cls.executor(t)
             except Exception as e:
                 logger.error("%s: %s", type(e).__name__, e)
-            except KeyboardInterrupt:
-                ...
         # Stop the timer; next put() will register again.
         cls._registered = False
         return None

@@ -214,8 +214,9 @@ def restore_render_device(self: RenderHandler, scene: bpy.types.Scene):
         scene.render.compositor_device = old
 
 
-def has_custom_vt_control() -> bool:
-    tree = get_comp_node_tree(bpy.context.scene)
+def has_custom_vt_control(scene: bpy.types.Scene | None = None) -> bool:
+    scene = scene or bpy.context.scene
+    tree = get_comp_node_tree(scene)
     if not tree:
         return False
     color_space_control = tree.nodes.get(VTC_NAME)
@@ -227,17 +228,18 @@ def has_custom_vt_control() -> bool:
     return space is not None
 
 
-def update_custom_vt():
-    if not has_custom_vt_control():
+def update_custom_vt(scene: bpy.types.Scene | None = None) -> None:
+    scene = scene or bpy.context.scene
+    if not has_custom_vt_control(scene):
         return
-    tree = get_comp_node_tree(bpy.context.scene)
+    tree = get_comp_node_tree(scene)
     color_space_control = tree.nodes.get(VTC_NAME)
     space = color_space_control.inputs.get("Space")
     if not space:
         space = color_space_control.inputs[0]
     try:
         color_space = float(space.default_value)
-        ori_vt = bpy.context.scene.view_settings.view_transform
+        ori_vt = scene.view_settings.view_transform
         space_value_map = {
             "AgX": 0,
             "Standard": 0.1,

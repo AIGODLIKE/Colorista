@@ -16,7 +16,7 @@ translations = (
     ("Use Asset Color Management", "使用资产色彩管理", PROP_TCTX),
     ("UI Icon Scale", "UI图标尺寸", PROP_TCTX),
     ("Gizmo Offset", "Gizmo控件偏移", PROP_TCTX),
-    ("Cache Compositor", "缓存当前合成树", PROP_TCTX),
+    ("Cache Compositor State", "缓存当前合成状态", PROP_TCTX),
     ("Force CPU Compositor on Render", "强制使用CPU渲染图像", PROP_TCTX),
     ("Cache Count", "缓存合成树数量", PROP_TCTX),
     ("History Merge Window", "历史合并窗口(秒)", PROP_TCTX),
