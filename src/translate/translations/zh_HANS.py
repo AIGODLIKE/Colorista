@@ -18,7 +18,7 @@ translations = (
     ("Gizmo Offset", "Gizmo控件偏移", PROP_TCTX),
     ("Cache Compositor State", "缓存当前合成状态", PROP_TCTX),
     ("Force CPU Compositor on Render", "强制使用CPU渲染图像", PROP_TCTX),
-    ("History cache limit", "历史缓存数量上限", PROP_TCTX),
+    ("History Cache Limit", "历史缓存数量上限", PROP_TCTX),
     ("History Merge Window", "历史合并窗口(秒)", PROP_TCTX),
     (
         "Within this many seconds, a new snapshot for the same asset replaces the latest one instead of adding another",
@@ -44,7 +44,7 @@ translations = (
     ("Colorista", "调色", PANEL_TCTX),
     ("Colorista", "调色", None),
     # Operator labels (OPS_TCTX)
-    ("Save preset", "存储预设", OPS_TCTX),
+    ("Save preset", "保存预设", OPS_TCTX),
     ("Delete preset", "删除预设", OPS_TCTX),
     ("Delete history", "删除历史", OPS_TCTX),
     ("Switch device", "切换合成设备", OPS_TCTX),
@@ -74,10 +74,10 @@ translations = (
     ("Import a compositor node tree from a file", "从文件导入合成节点树", None),
     ("Toggle viewport compositor for this window", "切换当前窗口的视口合成", None),
     # Messages
-    ("Loaded compositor: {}", "加载成功: {}"),
-    ("Overwrite preset: {}?", "是否覆盖 {}?"),
+    ("Loaded compositor: {}", "已加载合成器: {}"),
+    ("Overwrite preset: {}?", "是否覆盖预设 {}？"),
     ('Delete preset "{}" for asset "{}"?', '是否删除预设 "{}"（资产 "{}"）？'),
-    ("History file not found", "历史文件未找到"),
+    ("History file not found", "未找到历史文件"),
     ("Enable Coloring first", "请先开启调色"),
     ("Compositor nodes are not enabled for this scene", "当前场景未启用合成节点"),
     ("No asset selected", "未选择资产"),

@@ -57,7 +57,7 @@ class Preferences(bpy.types.AddonPreferences):
         apply_limit_change(context)
 
     cache_current_cache_count: bpy.props.IntProperty(
-        name="History cache limit",
+        name="History Cache Limit",
         default=10,
         min=1,
         max=100,
