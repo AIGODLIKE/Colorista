@@ -246,19 +246,33 @@ def _replace_top_ui_item(context: bpy.types.Context | None, entry: HistoryEntry)
         logger.error("Replace history UI failed: %s", e)
 
 
+def _is_under_dir(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except (ValueError, OSError):
+        return False
+    return True
+
+
 def remove_entry(context: bpy.types.Context | None, file: Path | str) -> bool:
+    """Remove a history JSON under the user cache directory only."""
     target = Path(file)
     cache_dir = get_user_cache_dir()
+    if not _is_under_dir(target, cache_dir):
+        return False
+    if target.suffix.lower() != ".json" or target.name == INDEX_NAME:
+        return False
+
     entries = _load_index(cache_dir)
     new_entries = []
     removed_from_index = False
     for entry in entries:
-        if Path(entry.file).as_posix() == target.as_posix() or entry.id == target.stem:
+        entry_path = Path(entry.file)
+        if entry_path.as_posix() == target.as_posix() or entry.id == target.stem:
             removed_from_index = True
-            path = Path(entry.file)
-            if path.is_file():
+            if _is_under_dir(entry_path, cache_dir) and entry_path.is_file():
                 try:
-                    path.unlink()
+                    entry_path.unlink()
                 except OSError:
                     pass
             continue

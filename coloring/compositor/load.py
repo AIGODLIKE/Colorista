@@ -77,7 +77,7 @@ def _load_compositor_sce(preset, context: bpy.types.Context):
 
 
 def _finish_load(sce: bpy.types.Scene, label: str) -> bool:
-    logger.info(_T("Load Compositor: {}").format(label))
+    logger.info(_T("Loaded compositor: {}").format(label))
     update_node_group(sce)
     update_custom_vt()
     return True

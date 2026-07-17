@@ -26,7 +26,7 @@ def _get_locale_suffix() -> str:
 
 
 def get_package_root() -> str:
-    """Extension / addon package id (parent of ``infra``)."""
+    """Extension / addon package id (parent of ``utils``)."""
     return __package__.rsplit(".", 1)[0]
 
 
@@ -75,10 +75,15 @@ def get_resource_dir_locale() -> Path:
 
 
 def get_extension_user_folder() -> Path:
-    """Persistent user data root (never the extension install tree)."""
+    """Persistent user data root (never the extension install tree).
+
+    Prefers ``extension_path_user``. Falls back to ``user_resource`` only for
+    legacy (non-extension) installs where ``extension_path_user`` raises.
+    """
     try:
         path = Path(bpy.utils.extension_path_user(get_package_root()))
     except ValueError:
+        # Legacy add-on install: extension_path_user is unavailable.
         path = Path(bpy.utils.user_resource("DATAFILES", path="Colorista", create=True))
     path.mkdir(parents=True, exist_ok=True)
     return path

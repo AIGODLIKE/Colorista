@@ -17,12 +17,12 @@ translations = (
     ("UI Icon Scale", "UI图标尺寸", PROP_TCTX),
     ("Gizmo Offset", "Gizmo控件偏移", PROP_TCTX),
     ("Cache Compositor", "缓存当前合成树", PROP_TCTX),
-    ("Force Use CPU Render Image", "强制使用CPU渲染图像", PROP_TCTX),
+    ("Force CPU Compositor on Render", "强制使用CPU渲染图像", PROP_TCTX),
     ("Cache Count", "缓存合成树数量", PROP_TCTX),
     ("History Merge Window", "历史合并窗口(秒)", PROP_TCTX),
     (
-        "Within this many seconds, dirty history for the same asset replaces the latest entry instead of adding a new one",
-        "在此秒数内，同一资产的脏历史会覆盖最新条目，而不是新增",
+        "Within this many seconds, a new snapshot for the same asset replaces the latest one instead of adding another",
+        "在此秒数内，同一资产的新快照会覆盖最新条目，而不是新增",
         None,
     ),
     ("Enable Logging", "启用日志", PROP_TCTX),
@@ -33,6 +33,7 @@ translations = (
     ("Folder for user-saved presets when custom path is enabled", "启用自定义路径时用于存放用户预设的文件夹", PROP_TCTX),
     # Property descriptions (msgctxt=None — same rule as operator bl_description)
     ("Enable Coloring", "开启调色", None),
+    ("Enable the Colorista color grading panel", "开启 Colorista 调色面板", None),
     ("No preset available", "无可用预设", None),
     ("Save user presets to a custom folder instead of the default", "将用户预设保存到自定义文件夹，而不是默认位置", None),
     ("Folder for user-saved presets when custom path is enabled", "启用自定义路径时用于存放用户预设的文件夹", None),
@@ -51,8 +52,8 @@ translations = (
     ("Switch asset", "切换资产", OPS_TCTX),
     ("Switch preset", "切换预设", OPS_TCTX),
     ("Reset to defaults", "重置为默认", OPS_TCTX),
-    ("Import a node tree", "导入合成节点树", OPS_TCTX),
-    ("Switch View Compositor", "切换视口合成", OPS_TCTX),
+    ("Import Node Tree", "导入合成节点树", OPS_TCTX),
+    ("Toggle Viewport Compositor", "切换视口合成", OPS_TCTX),
     ("Colorista gizmos", "调色 Gizmo", OPS_TCTX),
     # Operator enum items (OPS_TCTX)
     ("Previous", "上一个", OPS_TCTX),
@@ -73,7 +74,7 @@ translations = (
     ("Import a compositor node tree from a file", "从文件导入合成节点树", None),
     ("Toggle viewport compositor for this window", "切换当前窗口的视口合成", None),
     # Messages
-    ("Load Compositor: {}", "加载成功: {}"),
+    ("Loaded compositor: {}", "加载成功: {}"),
     ("Overwrite preset: {}?", "是否覆盖 {}?"),
     ("Delete {}'s preset: {}?", "是否删除 {} 的预设: {}?"),
     ("History file not found", "历史文件未找到"),

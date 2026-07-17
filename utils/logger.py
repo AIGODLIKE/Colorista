@@ -18,7 +18,7 @@ def _get_logfile() -> Path:
     try:
         import bpy
 
-        # Colorista.infra → Colorista (or bl_ext.*.Colorista)
+        # Colorista.utils → Colorista (or bl_ext.*.Colorista)
         root = __package__.rsplit(".", 1)[0]
         return Path(bpy.utils.extension_path_user(root)).joinpath("logs", "runtime.log")
     except Exception:
