@@ -16,16 +16,23 @@ module_list = (
 
 
 def register():
+    from .coloring import catalog
+
+    # Module state survives disable/enable; drop stale icon_id caches.
+    catalog.invalidate()
     for mod in module_list:
         mod.register()
 
 
 def unregister():
+    from .coloring import catalog
     from .utils.icon import Icon
 
     try:
         for mod in reversed(module_list):
             mod.unregister()
     finally:
+        # Preview collections are destroyed; drop enum caches that store icon_id.
+        catalog.invalidate()
         Icon.cleanup()
         logger.close()

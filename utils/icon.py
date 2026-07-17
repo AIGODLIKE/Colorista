@@ -43,7 +43,13 @@ class PrevMgr:
     def remove(prev):
         import bpy.utils.previews
 
-        bpy.utils.previews.remove(prev)
+        try:
+            bpy.utils.previews.remove(prev)
+        except Exception:
+            pass
+        for key, value in list(PrevMgr.__PREV__.items()):
+            if value is prev:
+                del PrevMgr.__PREV__[key]
 
 
 class MetaIn(type):
@@ -61,6 +67,8 @@ class Icon(metaclass=MetaIn):
     _RELOAD_RETRY: dict[str, int] = {}
     _RELOAD_DELAY = 0.2
     _RELOAD_MAX_RETRY = 3
+    # Bumped on cleanup so delayed reload timers from a prior enable are ignored.
+    _generation = 0
 
     @classmethod
     def _ensure_prev(cls):
@@ -91,6 +99,7 @@ class Icon(metaclass=MetaIn):
 
     @staticmethod
     def cleanup():
+        Icon._generation += 1
         if Icon.PREV_DICT is not None:
             PrevMgr.remove(Icon.PREV_DICT)
         Icon.PREV_DICT = None
@@ -125,7 +134,8 @@ class Icon(metaclass=MetaIn):
         name = FSWatcher.to_str(name)
         Icon.IMG_STATUS.pop(name, None)
         Icon._VALIDATED.discard(name)
-        Icon._ensure_prev().pop(name, None)
+        if Icon.PREV_DICT is not None:
+            Icon.PREV_DICT.pop(name, None)
         return True
 
     @staticmethod
@@ -195,6 +205,8 @@ class Icon(metaclass=MetaIn):
             return
         if Icon._RELOAD_RETRY.get(path, 0) >= Icon._RELOAD_MAX_RETRY:
             return
+        if Icon.PREV_DICT is None:
+            return
         preview = Icon._ensure_prev().get(path)
         icon_id = Icon.get_icon_id(path)
         if preview and not Icon._is_preview_empty(preview) and icon_id != 0:
@@ -211,9 +223,12 @@ class Icon(metaclass=MetaIn):
         if path in Icon._RELOAD_SCHEDULED:
             return
         Icon._RELOAD_SCHEDULED.add(path)
+        generation = Icon._generation
 
         def _reload():
             Icon._RELOAD_SCHEDULED.discard(path)
+            if generation != Icon._generation or Icon.PREV_DICT is None:
+                return None
             Icon._RELOAD_RETRY[path] = Icon._RELOAD_RETRY.get(path, 0) + 1
             Icon.remove_mark(path)
             try:
@@ -235,6 +250,8 @@ class Icon(metaclass=MetaIn):
     def get_icon_id(name: Path):
         import bpy
 
+        if Icon.PREV_DICT is None:
+            return 0
         prev = Icon._ensure_prev()
         p: bpy.types.ImagePreview = prev.get(FSWatcher.to_str(name), None)
         if not p:
@@ -245,6 +262,8 @@ class Icon(metaclass=MetaIn):
         return Icon.get_icon_id(name)
 
     def __contains__(self, name):
+        if Icon.PREV_DICT is None:
+            return False
         return FSWatcher.to_str(name) in Icon._ensure_prev()
 
     def __class_getitem__(cls, name):

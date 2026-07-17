@@ -51,16 +51,14 @@ def _register_asset_icon(icon_path: Path) -> int:
     return Icon.get_icon_id(icon_path)
 
 
-def _none_icon_id() -> int:
-    path = get_none_icon_path()
-    Icon.reg_icon(path)
-    return Icon.get_icon_id(path)
-
-
 def _refresh_cached_enum_icons(items: list) -> list:
+    """Re-resolve preview icon_ids.
+
+    After addon disable/enable, ``bpy.utils.previews`` IDs are invalidated but
+    directory mtimes are unchanged — cached tuples must not keep stale IDs.
+    """
     if not items:
         return items
-    none_id = _none_icon_id()
     refreshed = []
     changed = False
     for item in items:
@@ -68,7 +66,7 @@ def _refresh_cached_enum_icons(items: list) -> list:
             refreshed.append(item)
             continue
         identifier, name, desc, icon_id, idx = item
-        if identifier == PRESET_NONE_ID or icon_id not in (0, none_id):
+        if identifier == PRESET_NONE_ID:
             refreshed.append(item)
             continue
         path = Path(identifier)
