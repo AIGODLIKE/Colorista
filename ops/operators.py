@@ -264,7 +264,7 @@ class ColoristaSwitchPreset(bpy.types.Operator):
 class CompositorNodeTreeImport(bpy.types.Operator):
     bl_idname = "wm.colorista_compositor_import"
     bl_description = "Import a compositor node tree from a file"
-    bl_label = "Import a node tree"
+    bl_label = "Import Node Tree"
     bl_translation_context = OPS_TCTX
     bl_options = {"REGISTER", "UNDO"}
 

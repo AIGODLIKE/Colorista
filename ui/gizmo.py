@@ -87,7 +87,7 @@ def _navigate_button_slots(context: bpy.types.Context) -> int:
 
 class ColoristaGzOps(bpy.types.Operator):
     bl_idname = "wm.colorista_gz_switch_compositor"
-    bl_label = "Switch View Compositor"
+    bl_label = "Toggle Viewport Compositor"
     bl_description = "Toggle viewport compositor for this window"
     bl_translation_context = OPS_TCTX
     bl_options = {"REGISTER", "UNDO"}

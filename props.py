@@ -37,7 +37,7 @@ class Props(bpy.types.PropertyGroup):
     enable_coloring: bpy.props.BoolProperty(
         default=False,
         name="Enable Coloring",
-        description="Enable Coloring",
+        description="Enable the Colorista color grading panel",
         update=update_enable_coloring,
         translation_context=PROP_TCTX,
     )

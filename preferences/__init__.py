@@ -67,7 +67,7 @@ class Preferences(bpy.types.AddonPreferences):
 
     cache_history_merge_seconds: bpy.props.IntProperty(
         name="History Merge Window",
-        description="Within this many seconds, dirty history for the same asset replaces the latest entry instead of adding a new one",
+        description="Within this many seconds, a new snapshot for the same asset replaces the latest one instead of adding another",
         default=30,
         min=0,
         max=600,
@@ -75,7 +75,7 @@ class Preferences(bpy.types.AddonPreferences):
     )
 
     force_use_cpu_render_image: bpy.props.BoolProperty(
-        name="Force Use CPU Render Image",
+        name="Force CPU Compositor on Render",
         default=False,
         translation_context=PROP_TCTX,
     )

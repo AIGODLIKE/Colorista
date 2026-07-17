@@ -5,6 +5,13 @@ from .logger import logger
 
 
 class Timer:
+    """Deferred main-thread callbacks via ``bpy.app.timers``.
+
+    Used to run work *after* the current RNA update / draw finishes
+    (nested ID writes from property updates are unsafe).
+    Unregisters itself when the queue is empty.
+    """
+
     TimerQueue = deque()
     _registered = False
 
@@ -36,7 +43,9 @@ class Timer:
                 logger.error("%s: %s", type(e).__name__, e)
             except KeyboardInterrupt:
                 ...
-        return 0.01666
+        # Stop the timer; next put() will register again.
+        cls._registered = False
+        return None
 
     @classmethod
     def clear(cls):
