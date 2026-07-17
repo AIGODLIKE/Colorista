@@ -1,153 +1,97 @@
-from collections import deque
-import platform
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
+
 from .logger import logger
 
 
 class FSWatcher:
-    """
-    监听文件/文件夹变化的工具类
-        register: 注册监听, 传入路径和回调函数(可空)
-        unregister: 注销监听
-        run: 监听循环, 使用单例,只在第一次初始化时调用
-        stop: 停止监听, 释放资源
-        consume_change: 消费变化, 当监听对象发生变化时记录为changed, 主动消费后置False, 用于自定义回调函数
+    """On-demand path mtime checks (no background timer / polling).
+
+    register: seed a path for later comparisons
+    consume_change: compare mtime now; True if changed since last consume/seed
     """
     _watcher_path: dict[Path, bool] = {}
-    _watcher_stat = {}
-    _watcher_callback = {}
-    _watcher_queue = deque()
-    _running = False
+    _watcher_stat: dict[Path, int | None] = {}
     _enabled = False
-    _TIMER_INTERVAL = 0.5
 
     @classmethod
     def enable(cls) -> None:
         cls._enabled = True
-        if cls._watcher_path:
-            cls._run()
 
     @classmethod
     def disable(cls) -> None:
         cls._enabled = False
-        cls.stop()
+        cls.clear()
+
+    @classmethod
+    def clear(cls) -> None:
+        cls._watcher_path.clear()
+        cls._watcher_stat.clear()
 
     @classmethod
     def register(cls, path, callback=None):
+        del callback  # unused; kept for call-site compatibility
         path = cls.to_path(path)
-        if path in cls._watcher_path:
+        if not path or path in cls._watcher_path:
             return
         cls._watcher_path[path] = False
-        cls._watcher_callback[path] = callback
-        cls._run()
+        cls._watcher_stat[path] = cls._read_mtime(path)
 
     @classmethod
     def unregister(cls, path):
         path = cls.to_path(path)
         cls._watcher_path.pop(path, None)
-        cls._watcher_callback.pop(path, None)
+        cls._watcher_stat.pop(path, None)
 
     @classmethod
-    def _run(cls):
-        if not cls._enabled:
-            return
-        if cls._running:
-            return
-        cls._running = True
-        import bpy
-        bpy.app.timers.register(cls._timer, persistent=True)
-
-    @classmethod
-    def _timer(cls):
-        if not cls._running:
-            return None
-        cls._loop_one()
-        cls._run_ex_one()
-        return cls._TIMER_INTERVAL
-
-    @classmethod
-    def _run_ex_one(cls):
-        while cls._watcher_queue:
-            path = cls._watcher_queue.popleft()
-            if path not in cls._watcher_path:
-                continue
-            if callback := cls._watcher_callback[path]:
-                callback(path)
-
-    @classmethod
-    def _loop_one(cls):
-        for path, changed in list(cls._watcher_path.items()):
-            if changed:
-                continue
-            if not path.exists():
-                continue
-            mtime = path.stat().st_mtime_ns
-            if cls._watcher_stat.get(path, None) == mtime:
-                continue
-            cls._watcher_stat[path] = mtime
-            cls._watcher_path[path] = True
-            cls._watcher_queue.append(path)
-
-    @classmethod
-    def stop(cls):
-        cls._running = False
-        cls._watcher_queue.clear()
-        import bpy
+    def _read_mtime(cls, path: Path) -> int | None:
         try:
-            bpy.app.timers.unregister(cls._timer)
-        except Exception:
-            ...
+            if path.exists():
+                return path.stat().st_mtime_ns
+        except OSError:
+            pass
+        return None
+
+    @classmethod
+    def _poll_one(cls, path: Path) -> None:
+        if path not in cls._watcher_path:
+            return
+        if cls._watcher_path[path]:
+            return
+        mtime = cls._read_mtime(path)
+        if cls._watcher_stat.get(path) == mtime:
+            return
+        cls._watcher_stat[path] = mtime
+        cls._watcher_path[path] = True
 
     @classmethod
     def consume_change(cls, path) -> bool:
+        if not cls._enabled:
+            return False
         path = cls.to_path(path)
-        if path in cls._watcher_path and cls._watcher_path[path]:
+        if not path:
+            return False
+        if path not in cls._watcher_path:
+            cls.register(path)
+        cls._poll_one(path)
+        if cls._watcher_path.get(path):
             cls._watcher_path[path] = False
             return True
         return False
 
     @classmethod
-    @lru_cache(maxsize=1024)
-    def get_nas_mapping(cls):
-        if platform.system() != "Windows":
-            return {}
-        import subprocess
-        try:
-            result = subprocess.run("net use", capture_output=True, text=True, encoding="gbk", check=True)
-        except subprocess.CalledProcessError as e:
-            logger.warning(e)
-            return {}
-        if result.returncode != 0 or result.stdout is None:
-            return {}
-        nas_mapping = {}
-        try:
-            lines = result.stdout.strip().split("\n")[4:]
-            for line in lines:
-                columns = line.split()
-                if len(columns) < 3:
-                    continue
-                local_drive = columns[1] + "/"
-                nas_path = Path(columns[2]).resolve().as_posix()
-                nas_mapping[local_drive] = nas_path
-        except Exception:
-            ...
-        return nas_mapping
+    def stop(cls):
+        cls.clear()
 
     @classmethod
     @lru_cache(maxsize=1024)
     def to_str(cls, path: Path):
         p = Path(path)
         try:
-            res_str = p.resolve().as_posix()
+            return p.resolve().as_posix()
         except FileNotFoundError as e:
-            res_str = p.as_posix()
             logger.warning(e)
-        for local_drive, nas_path in cls.get_nas_mapping().items():
-            if not res_str.startswith(nas_path):
-                continue
-            return res_str.replace(nas_path, local_drive)
-        return res_str
+            return p.as_posix()
 
     @classmethod
     @lru_cache(maxsize=1024)

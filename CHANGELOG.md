@@ -1,8 +1,24 @@
 # Changelog
 
+## 2026-7-16
+
+重构: 包命名对齐 Gesture（utils / ops / ui / preferences / coloring / src.translate / props.py / register_mod.py）；paths 与 preferences 解耦
+
+优化: 4.x 合成树迁移去掉 per-node `view_layer.update()`；历史改为 index.json + 原子写 + Timer 延迟落盘 + 内容去重/节流
+
+保留: bl_info（Preferences 卸载）；operator bl_idname 与 Scene 属性名对等
+
+---
+
+## 2026-7-16 (earlier)
+
+重构: 架构分层（api / catalog / load / transfer / session / handlers）；统一资产与预设切换操作符；合成树迁移与 4.x/5.x 兼容集中；精简 Icon / 路径工具；清理死代码
+
+---
+
 ## 2026-7-10 v1.2.2
 
-修复: zip 安装后找不到默认预设（default.blend 路径解析）；预设列表无图标；开启调色失败时 RuntimeError 未捕获导致崩溃
+修复: zip 安装后找不到默认预设（default.blend 路径解析）；预设列表无图标；开启调色失败时 RuntimeError 未捕获导致崩溃；资产/预设枚举缩略图异步加载后缓存仍指向 NONE 占位图
 
 ---
 

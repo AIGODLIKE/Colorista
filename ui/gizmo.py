@@ -1,7 +1,8 @@
 import bpy
 
-from .utils import toggle_viewport_shading
-from ..preference import get_pref
+from ..coloring.compositor.viewport import toggle_viewport_shading
+from ..coloring.constants import OPS_TCTX
+from ..preferences import get_pref
 
 
 def calc_widget_unit():
@@ -57,7 +58,6 @@ def _icon_offset_from_axis(context: bpy.types.Context, icon_offset_mini: float) 
     if view_pref.mini_axis_type == "GIZMO":
         return icon_offset * 2.2
     if view_pref.mini_axis_type == "MINIMAL":
-        # (UI_UNIT_X * 2.0) + (rvisize * UI_SCALE_FAC * 1.6)
         return (calc_widget_unit() * 2.0) + (view_pref.mini_axis_size * ui_scale * 1.6)
     return icon_offset_mini * 0.75
 
@@ -75,7 +75,6 @@ def _navigate_button_slots(context: bpy.types.Context) -> int:
 
     rv3d = context.region_data
     slots = 0
-    # zoom / pan / camera — same order as view3d_gizmo_navigate.cc
     slots += 1  # zoom
     slots += 1  # pan
     slots += 1  # camera
@@ -89,8 +88,9 @@ def _navigate_button_slots(context: bpy.types.Context) -> int:
 class ColoristaGzOps(bpy.types.Operator):
     bl_idname = "wm.colorista_gz_switch_compositor"
     bl_label = "Switch View Compositor"
-    bl_description = "Switch View Compositor"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_description = "Toggle viewport compositor for this window"
+    bl_translation_context = OPS_TCTX
+    bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
     def poll(cls, context):
@@ -103,12 +103,13 @@ class ColoristaGzOps(bpy.types.Operator):
 
     def execute(self, context):
         toggle_viewport_shading(context)
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 class ColoristaGizmos(bpy.types.GizmoGroup):
     bl_idname = "ColoristaGizmos"
     bl_label = "Colorista gizmos"
+    bl_translation_context = OPS_TCTX
     bl_space_type = "VIEW_3D"
     bl_region_type = "WINDOW"
     bl_options = {"PERSISTENT", "SCALE", "SHOW_MODAL_ALL"}
@@ -121,7 +122,6 @@ class ColoristaGizmos(bpy.types.GizmoGroup):
         except AttributeError:
             return False
         if context.space_data and context.space_data.region_quadviews:
-            # 四视图模式下只在右上角视图显示
             return context.region_data == context.space_data.region_quadviews[-1]
         return True
 
@@ -131,7 +131,6 @@ class ColoristaGizmos(bpy.types.GizmoGroup):
         _xmin, _ymin, xmax, ymax = _visible_rect(context)
 
         icon_offset_from_axis = _icon_offset_from_axis(context, icon_offset_mini)
-        # Next free slot under Blender's navigate buttons (+1 gap to avoid overlap)
         slot = _navigate_button_slots(context) + 1
         pref = get_pref()
         if pref:

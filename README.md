@@ -176,7 +176,7 @@ Positive values brighten the corners, negative values darken the corners.
 
 ## limitation
 
-· The principle of presets is to save files. If you make changes, the presets will not be synchronized. Please save again.
+· User presets are saved as JSON under the extension user data folder (Preferences shows the path). Changing the asset template does not update existing presets; save again after structural changes.
 
 · Incorrect ACES settings are not recommended for use
 

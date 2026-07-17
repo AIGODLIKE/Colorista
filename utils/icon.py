@@ -1,8 +1,27 @@
-from .watcher import FSWatcher
-from .timer import Timer
+"""Preview-collection icon registry (enum thumbnails + panel icons)."""
+
+from __future__ import annotations
+
 from pathlib import Path
 
-IMG_SUFFIX = {".png", ".jpg", ".jpeg"}
+from .timer import Timer
+from .watcher import FSWatcher
+
+_UI_ICON_NAMES: frozenset[str] | None = None
+_FALLBACK_UI_ICON = "ERROR"
+
+
+def _ui_icon_names() -> frozenset[str]:
+    global _UI_ICON_NAMES
+    if _UI_ICON_NAMES is None:
+        import bpy
+
+        try:
+            items = bpy.types.UILayout.bl_rna.functions["prop"].parameters["icon"].enum_items
+            _UI_ICON_NAMES = frozenset(items.keys())
+        except Exception:
+            _UI_ICON_NAMES = frozenset()
+    return _UI_ICON_NAMES
 
 
 class PrevMgr:
@@ -13,6 +32,7 @@ class PrevMgr:
     def new() -> "bpy.utils.previews.ImagePreviewCollection":
         import bpy.utils.previews
         import random
+
         prev = bpy.utils.previews.new()
         while (i := random.randint(0, 999999999)) in PrevMgr.__PREV__:
             continue
@@ -22,14 +42,8 @@ class PrevMgr:
     @staticmethod
     def remove(prev):
         import bpy.utils.previews
-        bpy.utils.previews.remove(prev)
 
-    @staticmethod
-    def clear():
-        for prev in PrevMgr.__PREV__.values():
-            prev.clear()
-            prev.close()
-        PrevMgr.__PREV__.clear()
+        bpy.utils.previews.remove(prev)
 
 
 class MetaIn(type):
@@ -41,10 +55,8 @@ class Icon(metaclass=MetaIn):
     PREV_DICT = None
     NONE_IMAGE = ""
     IMG_STATUS = {}
-    PIX_STATUS = {}
-    PATH2BPY = {}
-    ENABLE_HQ_PREVIEW = True
     INSTANCE = None
+    _VALIDATED: set[str] = set()
     _RELOAD_SCHEDULED: set[str] = set()
     _RELOAD_RETRY: dict[str, int] = {}
     _RELOAD_DELAY = 0.2
@@ -67,31 +79,11 @@ class Icon(metaclass=MetaIn):
         return cls.INSTANCE
 
     @staticmethod
-    def update_path2bpy():
-        import bpy
-        Icon.PATH2BPY.clear()
-        for i in bpy.data.images:
-            Icon.PATH2BPY[FSWatcher.to_str(i.filepath)] = i
-
-    @staticmethod
-    def apply_alpha(img):
-        if img.file_format != "PNG" or img.channels < 4:
-            return
-        # 预乘alpha 到rgb
-        import numpy as np
-        pixels = np.zeros(img.size[0] * img.size[1] * 4, dtype=np.float32)
-        img.pixels.foreach_get(pixels)
-        sized_pixels = pixels.reshape(-1, 4)
-        sized_pixels[:, :3] *= sized_pixels[:, 3].reshape(-1, 1)
-        img.pixels.foreach_set(pixels)
-
-    @staticmethod
     def clear():
         prev = Icon._ensure_prev()
         prev.clear()
         Icon.IMG_STATUS.clear()
-        Icon.PIX_STATUS.clear()
-        Icon.PATH2BPY.clear()
+        Icon._VALIDATED.clear()
         Icon._RELOAD_SCHEDULED.clear()
         Icon._RELOAD_RETRY.clear()
         if Icon.NONE_IMAGE:
@@ -103,18 +95,11 @@ class Icon(metaclass=MetaIn):
             PrevMgr.remove(Icon.PREV_DICT)
         Icon.PREV_DICT = None
         Icon.IMG_STATUS.clear()
-        Icon.PIX_STATUS.clear()
-        Icon.PATH2BPY.clear()
+        Icon._VALIDATED.clear()
         Icon._RELOAD_SCHEDULED.clear()
         Icon._RELOAD_RETRY.clear()
         Icon.NONE_IMAGE = ""
         Icon.INSTANCE = None
-
-    @staticmethod
-    def set_hq_preview():
-        # from .preference import get_pref
-        # Icon.ENABLE_HQ_PREVIEW = get_pref().enable_hq_preview
-        return
 
     @staticmethod
     def try_mark_image(path) -> bool:
@@ -136,18 +121,10 @@ class Icon(metaclass=MetaIn):
         return True
 
     @staticmethod
-    def can_mark_pixel(prev, name) -> bool:
-        name = FSWatcher.to_str(name)
-        if Icon.PIX_STATUS.get(name) == hash(prev.pixels):
-            return False
-        Icon.PIX_STATUS[name] = hash(prev.pixels)
-        return True
-
-    @staticmethod
     def remove_mark(name) -> bool:
         name = FSWatcher.to_str(name)
         Icon.IMG_STATUS.pop(name, None)
-        Icon.PIX_STATUS.pop(name, None)
+        Icon._VALIDATED.discard(name)
         Icon._ensure_prev().pop(name, None)
         return True
 
@@ -160,55 +137,74 @@ class Icon(metaclass=MetaIn):
         Icon.reg_icon(Icon.NONE_IMAGE)
 
     @staticmethod
-    def reg_icon(path, reload=False, hq=False):
+    def reg_icon(path, reload=False):
         path = FSWatcher.to_str(path)
-        if not Icon.can_mark_image(path) and not reload:
-            Icon._ensure_valid_preview(path, hq=hq)
+        # Hot path: panel draw / enum items call this every redraw.
+        if not reload and path in Icon._VALIDATED:
             return Icon[path]
-        if Icon.ENABLE_HQ_PREVIEW and hq:
-            try:
-                Icon.reg_icon_hq(path)
-            except BaseException:
-                Timer.put((Icon.reg_icon_hq, path))
-        else:
-            prev = Icon._ensure_prev()
-            if path not in Icon:
-                prev.load(path, path, 'IMAGE')
-            if reload:
-                Timer.put(prev[path].reload)
-        Icon._ensure_valid_preview(path, hq=hq)
+        if not Icon.can_mark_image(path) and not reload:
+            Icon._ensure_valid_preview(path)
+            return Icon[path]
+        prev = Icon._ensure_prev()
+        if path not in Icon:
+            prev.load(path, path, "IMAGE")
+        if reload:
+            Timer.put(prev[path].reload)
+        Icon._ensure_valid_preview(path)
         return Icon[path]
 
     @staticmethod
+    def resource(name: str, *, reload: bool = False) -> int:
+        """Register an icon from ``resource/icons`` by filename (e.g. ``\"color.png\"``)."""
+        from .paths import get_icons_dir
+
+        path = get_icons_dir().joinpath(name)
+        if not path.suffix:
+            path = path.with_suffix(".png")
+        return Icon.reg_icon(path, reload=reload)
+
+    @staticmethod
+    def ui(name: str, fallback: str = _FALLBACK_UI_ICON) -> str:
+        """Return a builtin UI icon identifier, falling back if unsupported in this Blender."""
+        names = _ui_icon_names()
+        if name in names:
+            return name
+        if fallback in names:
+            return fallback
+        return "NONE"
+
+    @staticmethod
     def _is_preview_empty(preview) -> bool:
+        """One-time emptiness check (callers must cache via _VALIDATED)."""
         try:
             w, h = preview.icon_size
             if w <= 0 or h <= 0:
                 return True
             pixels = preview.image_pixels_float
-            if not pixels or len(pixels) == 0:
+            if not pixels:
                 return True
-            for value in pixels:
-                if value != 0.0:
-                    return False
-            return True
+            # Early-exit scan; only runs until the path is marked validated.
+            return not any(value != 0.0 for value in pixels)
         except (AttributeError, TypeError, ReferenceError):
             return True
 
     @staticmethod
-    def _ensure_valid_preview(path, hq=False):
+    def _ensure_valid_preview(path):
         path = FSWatcher.to_str(path)
+        if path in Icon._VALIDATED:
+            return
         if Icon._RELOAD_RETRY.get(path, 0) >= Icon._RELOAD_MAX_RETRY:
             return
         preview = Icon._ensure_prev().get(path)
         icon_id = Icon.get_icon_id(path)
         if preview and not Icon._is_preview_empty(preview) and icon_id != 0:
             Icon._RELOAD_RETRY.pop(path, None)
+            Icon._VALIDATED.add(path)
             return
-        Icon._schedule_delayed_reload(path, hq=hq)
+        Icon._schedule_delayed_reload(path)
 
     @staticmethod
-    def _schedule_delayed_reload(path, hq=False):
+    def _schedule_delayed_reload(path):
         import bpy
 
         path = FSWatcher.to_str(path)
@@ -221,13 +217,14 @@ class Icon(metaclass=MetaIn):
             Icon._RELOAD_RETRY[path] = Icon._RELOAD_RETRY.get(path, 0) + 1
             Icon.remove_mark(path)
             try:
-                Icon.reg_icon(path, reload=True, hq=hq)
+                Icon.reg_icon(path, reload=True)
             except Exception:
                 pass
             try:
                 for window in bpy.context.window_manager.windows:
                     for area in window.screen.areas:
-                        area.tag_redraw()
+                        if area.type == "VIEW_3D":
+                            area.tag_redraw()
             except Exception:
                 pass
             return None
@@ -235,87 +232,14 @@ class Icon(metaclass=MetaIn):
         bpy.app.timers.register(_reload, first_interval=Icon._RELOAD_DELAY)
 
     @staticmethod
-    def reg_icon_hq(path):
-        import bpy
-        p = FSWatcher.to_path(path)
-        path = FSWatcher.to_str(path)
-        if path in Icon:
-            return
-        if p.exists() and p.suffix.lower() in IMG_SUFFIX:
-            img = bpy.data.images.load(path)
-            Icon.apply_alpha(img)
-            Icon.reg_icon_by_pixel(img, path)
-            Timer.put((bpy.data.images.remove, img))  # 直接使用 bpy.data.images.remove 会导致卡死
-
-    @staticmethod
-    def find_image(path):
-        img = Icon.PATH2BPY.get(FSWatcher.to_str(path), None)
-        if not img:
-            return None
-        try:
-            _ = img.name  # hack ref detect
-            return img
-        except ReferenceError:
-            Icon.update_path2bpy()
-        return None
-
-    @staticmethod
-    def load_icon(path):
-        import bpy
-        p = FSWatcher.to_path(path)
-        path = FSWatcher.to_str(path)
-
-        if not Icon.can_mark_image(path):
-            return
-
-        # if p.name[:63] in bpy.data.images:
-        #     img = bpy.data.images[p.name[:63]]
-        #     Icon.update_icon_pixel(img.name, img)
-        if img := Icon.find_image(path):
-            Icon.update_icon_pixel(path, img)
-            return img
-        elif p.suffix.lower() in IMG_SUFFIX:
-            img = bpy.data.images.load(path)
-            img.filepath = path
-            Icon.apply_alpha(img)
-            Icon.update_path2bpy()
-            # img.name = path
-            return img
-
-    @staticmethod
-    def reg_icon_by_pixel(prev, name):
-        name = FSWatcher.to_str(name)
-        if not Icon.can_mark_pixel(prev, name):
-            return
-        if name in Icon:
-            return
-        p = Icon._ensure_prev().new(name)
-        p.icon_size = (32, 32)
-        p.image_size = (prev.size[0], prev.size[1])
-        p.image_pixels_float[:] = prev.pixels[:]
-
-    @staticmethod
     def get_icon_id(name: Path):
         import bpy
+
         prev = Icon._ensure_prev()
         p: bpy.types.ImagePreview = prev.get(FSWatcher.to_str(name), None)
         if not p:
             p = prev.get(FSWatcher.to_str(Icon.NONE_IMAGE), None)
         return p.icon_id if p else 0
-
-    @staticmethod
-    def update_icon_pixel(name, prev):
-        """
-        更新bpy.data.image 时一并更新(因为pixel 的hash 不变)
-        """
-        prev.reload()
-        p = Icon._ensure_prev().get(name, None)
-        if not p:
-            # logger.error("No")
-            return
-        p.icon_size = (32, 32)
-        p.image_size = (prev.size[0], prev.size[1])
-        p.image_pixels_float[:] = prev.pixels[:]
 
     def __getitem__(self, name):
         return Icon.get_icon_id(name)
