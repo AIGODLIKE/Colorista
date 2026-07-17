@@ -36,6 +36,16 @@ def ensure_coloring_content(context: bpy.types.Context | None = None) -> None:
 
     activate()
     if _has_ui_nodes(scene):
+        from . import history
+
+        asset = None
+        try:
+            asset = scene.colorista_prop.get_asset_path(context)
+        except Exception:
+            pass
+        if not asset:
+            asset = session.last_loaded_asset
+        history.set_baseline_from_scene(scene, asset)
         return
 
     from ..utils.logger import logger
@@ -51,15 +61,21 @@ def ensure_coloring_content(context: bpy.types.Context | None = None) -> None:
         logger.exception("Failed to restore coloring compositor")
 
 
+def _refresh_history_ui(context: bpy.types.Context | None = None) -> None:
+    from . import history
+
+    history.refresh_from_disk(context)
+
+
 @bpy.app.handlers.persistent
 def _on_file_load(_scene):
     session.loaded_node_groups.clear()
+    from . import history
+
+    history.clear_baseline()
     try:
         ensure_coloring_content(bpy.context)
-        if bpy.context.scene.colorista_prop.enable_coloring:
-            from . import history
-
-            history.refresh_from_disk()
+        _refresh_history_ui(bpy.context)
     except AttributeError:
         pass
 
@@ -86,6 +102,7 @@ def _unregister_load_post():
 def bootstrap_coloring_state():
     try:
         ensure_coloring_content(bpy.context)
+        _refresh_history_ui(bpy.context)
     except Exception:
         pass
 
@@ -154,6 +171,10 @@ def deactivate(context: bpy.types.Context | None = None, *, clear_tree: bool = F
 
     Timer.unreg()
     session.clear_loaded_preset()
+    from . import history
+
+    history.clear_baseline()
+    history.discard_capture()
 
 
 def register():

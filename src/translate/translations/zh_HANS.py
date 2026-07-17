@@ -19,6 +19,12 @@ translations = (
     ("Cache Compositor", "缓存当前合成树", PROP_TCTX),
     ("Force Use CPU Render Image", "强制使用CPU渲染图像", PROP_TCTX),
     ("Cache Count", "缓存合成树数量", PROP_TCTX),
+    ("History Merge Window", "历史合并窗口(秒)", PROP_TCTX),
+    (
+        "Within this many seconds, dirty history for the same asset replaces the latest entry instead of adding a new one",
+        "在此秒数内，同一资产的脏历史会覆盖最新条目，而不是新增",
+        None,
+    ),
     ("Enable Logging", "启用日志", PROP_TCTX),
     ("Main Node Group Name", "主节点组名称", PROP_TCTX),
     ("Use custom presets folder", "使用自定义预设文件夹", PROP_TCTX),

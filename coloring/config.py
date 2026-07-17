@@ -10,6 +10,7 @@ class ColoristaConfig:
     use_asset_color_space_pref: bool = False
     cache_current_compositor: bool = True
     cache_current_cache_count: int = 10
+    cache_history_merge_seconds: int = 30
     force_use_cpu_render_image: bool = False
     main_node_group_name: str = "Basic adjustment nodes for colorists"
     use_custom_presets_path: bool = False
@@ -35,6 +36,7 @@ def get_config() -> ColoristaConfig:
         use_asset_color_space_pref=bool(pref.use_asset_color_space_pref),
         cache_current_compositor=bool(pref.cache_current_compositor),
         cache_current_cache_count=int(pref.cache_current_cache_count),
+        cache_history_merge_seconds=int(pref.cache_history_merge_seconds),
         force_use_cpu_render_image=bool(pref.force_use_cpu_render_image),
         main_node_group_name=pref.main_node_group_name or ColoristaConfig.main_node_group_name,
         use_custom_presets_path=bool(pref.use_custom_presets_path),
