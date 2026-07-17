@@ -18,7 +18,7 @@ translations = (
     ("Gizmo Offset", "Gizmo控件偏移", PROP_TCTX),
     ("Cache Compositor State", "缓存当前合成状态", PROP_TCTX),
     ("Force CPU Compositor on Render", "强制使用CPU渲染图像", PROP_TCTX),
-    ("Cache Count", "缓存合成树数量", PROP_TCTX),
+    ("History cache limit", "历史缓存数量上限", PROP_TCTX),
     ("History Merge Window", "历史合并窗口(秒)", PROP_TCTX),
     (
         "Within this many seconds, a new snapshot for the same asset replaces the latest one instead of adding another",
@@ -53,8 +53,8 @@ translations = (
     ("Switch preset", "切换预设", OPS_TCTX),
     ("Reset to defaults", "重置为默认", OPS_TCTX),
     ("Import node tree", "导入合成节点树", OPS_TCTX),
-    ("Toggle Viewport Compositor", "切换视口合成", OPS_TCTX),
-    ("Colorista gizmos", "调色 Gizmo", OPS_TCTX),
+    ("Toggle viewport compositor", "切换视口合成", OPS_TCTX),
+    ("Colorista gizmo", "调色 Gizmo", OPS_TCTX),
     # Operator enum items (OPS_TCTX)
     ("Previous", "上一个", OPS_TCTX),
     ("Next", "下一个", OPS_TCTX),
