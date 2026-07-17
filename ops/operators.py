@@ -36,7 +36,7 @@ class ColoristaSavePreset(bpy.types.Operator):
     bl_description = "Save the current compositor values as a preset"
     bl_label = "Save preset"
     bl_translation_context = OPS_TCTX
-    bl_options = {"REGISTER"}
+    bl_options = {"INTERNAL"}
 
     preset: bpy.props.StringProperty(default="", options={"HIDDEN", "SKIP_SAVE"})
     popup: bpy.props.BoolProperty(default=True, options={"HIDDEN", "SKIP_SAVE"})
@@ -109,7 +109,7 @@ class ColoristaDeletePreset(bpy.types.Operator):
     bl_description = "Delete the selected user preset"
     bl_label = "Delete preset"
     bl_translation_context = OPS_TCTX
-    bl_options = {"REGISTER", "UNDO"}
+    bl_options = {"INTERNAL"}
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
