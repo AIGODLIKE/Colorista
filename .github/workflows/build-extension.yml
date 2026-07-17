@@ -1,0 +1,151 @@
+# Reusable Blender Extension pack workflow.
+#
+# Copy this file to another add-on repo, then usually only edit:
+#   - on.push.branches / on.pull_request.branches  (default branch name)
+#   - env.SOURCE_DIR  (path to the folder that contains blender_manifest.toml)
+#   - env.BLENDER_VERSION / BLENDER_SERIES  (optional; keep current LTS)
+#
+# Outputs:
+#   Actions Artifact  →  {id}.zip
+#       └── {id}/
+#           ├── blender_manifest.toml
+#           ├── __init__.py
+#           └── ...
+#   GitHub Release    →  {id}-{version}.zip  (same nested layout)
+#
+# id / version are read from blender_manifest.toml automatically.
+
+name: Build Extension
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Folder that contains blender_manifest.toml (use "." if it is the repo root).
+  SOURCE_DIR: "."
+
+  # Blender used only for `extension validate` / `extension build`.
+  BLENDER_VERSION: "4.2.22"
+  BLENDER_SERIES: "4.2"
+
+  # Optional override for the Actions download name (without .zip).
+  # Leave empty to use the extension id from blender_manifest.toml.
+  ARTIFACT_NAME: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Read manifest
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -euo pipefail
+          test -f blender_manifest.toml
+
+          EXTENSION_ID="$(python3 - <<'PY'
+          import pathlib, re
+          text = pathlib.Path("blender_manifest.toml").read_text(encoding="utf-8")
+          match = re.search(r'(?m)^id\s*=\s*"([^"]+)"', text)
+          if not match:
+              raise SystemExit("id not found in blender_manifest.toml")
+          print(match.group(1))
+          PY
+          )"
+          EXTENSION_VERSION="$(python3 - <<'PY'
+          import pathlib, re
+          text = pathlib.Path("blender_manifest.toml").read_text(encoding="utf-8")
+          match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', text)
+          if not match:
+              raise SystemExit("version not found in blender_manifest.toml")
+          print(match.group(1))
+          PY
+          )"
+
+          ARTIFACT_NAME="${ARTIFACT_NAME:-$EXTENSION_ID}"
+
+          {
+            echo "EXTENSION_ID=$EXTENSION_ID"
+            echo "EXTENSION_VERSION=$EXTENSION_VERSION"
+            echo "ARTIFACT_NAME=$ARTIFACT_NAME"
+            echo "RELEASE_ZIP_NAME=${EXTENSION_ID}-${EXTENSION_VERSION}.zip"
+          } >> "$GITHUB_ENV"
+
+          echo "Extension id=$EXTENSION_ID version=$EXTENSION_VERSION artifact=$ARTIFACT_NAME.zip"
+
+      - name: Download Blender
+        run: |
+          set -euo pipefail
+          archive="blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+          url="https://download.blender.org/release/Blender${BLENDER_SERIES}/${archive}"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" "$url"
+          tar -C "$RUNNER_TEMP" -xf "$RUNNER_TEMP/$archive"
+          blender_bin="$(find "$RUNNER_TEMP" -type f -name blender -path "*/blender-${BLENDER_VERSION}-linux-x64/*" | head -n1)"
+          test -x "$blender_bin"
+          echo "BLENDER_BIN=$blender_bin" >> "$GITHUB_ENV"
+          "$blender_bin" --version
+
+      - name: Validate extension
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -euo pipefail
+          "$BLENDER_BIN" --command extension validate
+
+      - name: Build nested extension zip
+        run: |
+          set -euo pipefail
+          source_dir="$(cd "$SOURCE_DIR" && pwd)"
+          rm -rf dist
+          mkdir -p "dist/staging/${EXTENSION_ID}" "dist/release"
+
+          # Official flat package from Blender CLI.
+          "$BLENDER_BIN" --command extension build \
+            --source-dir "$source_dir" \
+            --output-dir dist \
+            --verbose
+
+          flat_zip="$(ls dist/*.zip | head -n1)"
+          test -f "$flat_zip"
+
+          # Rebuild as: {id}.zip / {id}-{version}.zip
+          #   └── {id}/
+          #       ├── blender_manifest.toml
+          #       └── ...
+          unzip -q "$flat_zip" -d "dist/staging/${EXTENSION_ID}"
+          test -f "dist/staging/${EXTENSION_ID}/blender_manifest.toml"
+          rm -f "$flat_zip"
+
+          (
+            cd dist/staging
+            zip -r -q "../release/${RELEASE_ZIP_NAME}" "${EXTENSION_ID}"
+          )
+
+          "$BLENDER_BIN" --command extension validate "dist/release/${RELEASE_ZIP_NAME}"
+          ls -lh "dist/release/${RELEASE_ZIP_NAME}"
+          echo "Nested layout:"
+          unzip -l "dist/release/${RELEASE_ZIP_NAME}" | head -n 20
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          # Downloaded as {ARTIFACT_NAME}.zip → {EXTENSION_ID}/...
+          name: ${{ env.ARTIFACT_NAME }}
+          path: dist/staging/
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/release/${{ env.RELEASE_ZIP_NAME }}
+          generate_release_notes: true

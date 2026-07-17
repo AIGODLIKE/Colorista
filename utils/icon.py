@@ -1,9 +1,27 @@
 """Preview-collection icon registry (enum thumbnails + panel icons)."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from .timer import Timer
 from .watcher import FSWatcher
+
+_UI_ICON_NAMES: frozenset[str] | None = None
+_FALLBACK_UI_ICON = "ERROR"
+
+
+def _ui_icon_names() -> frozenset[str]:
+    global _UI_ICON_NAMES
+    if _UI_ICON_NAMES is None:
+        import bpy
+
+        try:
+            items = bpy.types.UILayout.bl_rna.functions["prop"].parameters["icon"].enum_items
+            _UI_ICON_NAMES = frozenset(items.keys())
+        except Exception:
+            _UI_ICON_NAMES = frozenset()
+    return _UI_ICON_NAMES
 
 
 class PrevMgr:
@@ -134,6 +152,26 @@ class Icon(metaclass=MetaIn):
             Timer.put(prev[path].reload)
         Icon._ensure_valid_preview(path)
         return Icon[path]
+
+    @staticmethod
+    def resource(name: str, *, reload: bool = False) -> int:
+        """Register an icon from ``resource/icons`` by filename (e.g. ``\"color.png\"``)."""
+        from .paths import get_icons_dir
+
+        path = get_icons_dir().joinpath(name)
+        if not path.suffix:
+            path = path.with_suffix(".png")
+        return Icon.reg_icon(path, reload=reload)
+
+    @staticmethod
+    def ui(name: str, fallback: str = _FALLBACK_UI_ICON) -> str:
+        """Return a builtin UI icon identifier, falling back if unsupported in this Blender."""
+        names = _ui_icon_names()
+        if name in names:
+            return name
+        if fallback in names:
+            return fallback
+        return "NONE"
 
     @staticmethod
     def _is_preview_empty(preview) -> bool:
