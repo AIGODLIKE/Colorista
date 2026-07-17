@@ -1,4 +1,9 @@
-"""Asset / preset directory listing for EnumProperty items."""
+"""Asset / preset directory listing for EnumProperty items.
+
+Enum items are built once (lazy on first access) and kept until
+``invalidate()`` — called on addon register/reload and when the user
+saves/deletes a preset. Panel redraw must not touch the filesystem.
+"""
 
 from __future__ import annotations
 
@@ -7,35 +12,43 @@ from pathlib import Path
 from .constants import PRESET_NONE_ID
 from ..utils.icon import Icon
 from ..utils.paths import get_asset_preset_dir, get_none_icon_path, get_resource_dir_locale
-from ..utils.watcher import FSWatcher
 from .config import get_config
 
 _ICON_SUFFIXES = (".png", ".jpg", ".jpeg", ".tiff")
 
-_cache: dict[str, tuple[int | None, list]] = {}
+# (items, Icon._generation) — generation invalidates preview icon_ids after reload.
+_cache: dict[str, tuple[list, int]] = {}
+_path_key_memo: dict[str, str] = {}
+_locale_dir_memo: Path | None = None
+_preset_dir_memo: dict[str, Path] = {}
+_UNSET = object()
+_custom_root_memo: str | None | object = _UNSET
 
 
 def _path_key(path: Path) -> str:
+    raw = path.as_posix()
+    memo = _path_key_memo.get(raw)
+    if memo is not None:
+        return memo
     try:
-        return path.resolve().as_posix()
+        key = path.resolve().as_posix()
     except OSError:
-        return path.as_posix()
-
-
-def _dir_mtime(path: Path) -> int | None:
-    try:
-        if path.exists():
-            return path.stat().st_mtime_ns
-    except OSError:
-        pass
-    return None
+        key = raw
+    _path_key_memo[raw] = key
+    return key
 
 
 def invalidate(path: Path | str | None = None) -> None:
+    """Drop cached enum lists. ``None`` clears everything (register / prefs)."""
+    global _locale_dir_memo, _custom_root_memo
     if path is None:
         _cache.clear()
+        _preset_dir_memo.clear()
+        _locale_dir_memo = None
+        _custom_root_memo = _UNSET
         return
-    _cache.pop(_path_key(Path(path)), None)
+    key = _path_key(Path(path))
+    _cache.pop(key, None)
 
 
 def find_icon(name: str, directory: Path) -> Path:
@@ -52,11 +65,7 @@ def _register_asset_icon(icon_path: Path) -> int:
 
 
 def _refresh_cached_enum_icons(items: list) -> list:
-    """Re-resolve preview icon_ids.
-
-    After addon disable/enable, ``bpy.utils.previews`` IDs are invalidated but
-    directory mtimes are unchanged — cached tuples must not keep stale IDs.
-    """
+    """Re-resolve preview icon_ids after preview collection recreate."""
     if not items:
         return items
     refreshed = []
@@ -84,22 +93,51 @@ def _refresh_cached_enum_icons(items: list) -> list:
 
 def _get_cached(directory: Path, builder) -> list:
     key = _path_key(directory)
-    FSWatcher.register(directory)
-    mtime = _dir_mtime(directory)
-    changed = FSWatcher.consume_change(directory)
-    if not changed and key in _cache:
-        cached_mtime, items = _cache[key]
-        if cached_mtime == mtime:
-            refreshed = _refresh_cached_enum_icons(items)
-            _cache[key] = (mtime, refreshed)
-            return refreshed
+    icon_gen = Icon._generation
+    entry = _cache.get(key)
+    if entry is not None:
+        items, cached_gen = entry
+        if cached_gen == icon_gen:
+            return items
+        items = _refresh_cached_enum_icons(items)
+        _cache[key] = (items, icon_gen)
+        return items
     items = builder()
-    _cache[key] = (mtime, items)
+    _cache[key] = (items, icon_gen)
     return items
 
 
+def _locale_resource_dir() -> Path:
+    global _locale_dir_memo
+    if _locale_dir_memo is not None:
+        return _locale_dir_memo
+    _locale_dir_memo = get_resource_dir_locale()
+    return _locale_dir_memo
+
+
+def _custom_presets_root() -> str | None:
+    global _custom_root_memo
+    if _custom_root_memo is not _UNSET:
+        return _custom_root_memo  # type: ignore[return-value]
+    root = get_config().custom_presets_root
+    _custom_root_memo = root
+    return root
+
+
+def _preset_dir_for_asset(asset_path: str) -> Path:
+    hit = _preset_dir_memo.get(asset_path)
+    if hit is not None:
+        return hit
+    preset_dir = get_asset_preset_dir(
+        Path(asset_path),
+        custom_presets_root=_custom_presets_root(),
+    )
+    _preset_dir_memo[asset_path] = preset_dir
+    return preset_dir
+
+
 def list_categories(_context=None) -> list:
-    rdir = get_resource_dir_locale()
+    rdir = _locale_resource_dir()
 
     def build():
         items = []
@@ -135,7 +173,7 @@ def list_presets(asset_path: str, _context=None) -> list:
     if not asset_path:
         return [(PRESET_NONE_ID, "None", "No preset available", 0)]
     asset = Path(asset_path)
-    preset_dir = get_asset_preset_dir(asset, custom_presets_root=get_config().custom_presets_root)
+    preset_dir = _preset_dir_for_asset(asset_path)
 
     def build():
         items = []

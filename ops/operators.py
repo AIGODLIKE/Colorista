@@ -100,6 +100,7 @@ class ColoristaSavePreset(bpy.types.Operator):
         catalog.invalidate(
             get_asset_preset_dir(asset, custom_presets_root=_custom_presets_root())
         )
+        self.report({"INFO"}, _T("Preset saved: {}").format(path.stem))
         return {"FINISHED"}
 
 

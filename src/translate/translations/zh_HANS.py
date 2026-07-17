@@ -86,6 +86,7 @@ translations = (
     ("Select a preset to delete", "请选择要删除的预设"),
     ("Only user-saved presets can be deleted", "只能删除用户保存的预设"),
     ("Preset path is outside the user presets folder", "预设路径不在用户预设目录内"),
+    ("Preset saved: {}", "预设已保存: {}"),
     ("No default preset found", "未找到默认预设"),
     ("Preset not found: {}", "找不到预设: {}"),
     ("Failed to load compositor from {}", "加载合成器失败: {}"),

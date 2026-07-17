@@ -65,13 +65,28 @@ def _dir_has_assets(path: Path) -> bool:
 
 
 def get_resource_dir_locale() -> Path:
-    preferred = get_locale_dir(_get_locale_suffix())
+    """Locale resource folder (EN/CN). Cached per locale for enum hot paths."""
+    global _locale_resource_dir
+    suffix = _get_locale_suffix()
+    cached = _locale_resource_dir
+    if cached is not None and cached[0] == suffix:
+        return cached[1]
+
+    preferred = get_locale_dir(suffix)
     if _dir_has_assets(preferred):
-        return preferred
-    fallback = get_locale_dir("CN")
-    if _dir_has_assets(fallback):
-        return fallback
-    return preferred
+        result = preferred
+    else:
+        fallback = get_locale_dir("CN")
+        result = fallback if _dir_has_assets(fallback) else preferred
+    _locale_resource_dir = (suffix, result)
+    return result
+
+
+_extension_user_folder: Path | None = None
+_default_user_presets: Path | None = None
+_resource_dir_resolved: Path | None = None
+_asset_preset_key_memo: dict[str, Path] = {}
+_locale_resource_dir: tuple[str, Path] | None = None
 
 
 def get_extension_user_folder() -> Path:
@@ -80,18 +95,26 @@ def get_extension_user_folder() -> Path:
     Prefers ``extension_path_user``. Falls back to ``user_resource`` only for
     legacy (non-extension) installs where ``extension_path_user`` raises.
     """
+    global _extension_user_folder
+    if _extension_user_folder is not None:
+        return _extension_user_folder
     try:
         path = Path(bpy.utils.extension_path_user(get_package_root()))
     except ValueError:
         # Legacy add-on install: extension_path_user is unavailable.
         path = Path(bpy.utils.user_resource("DATAFILES", path="Colorista", create=True))
     path.mkdir(parents=True, exist_ok=True)
+    _extension_user_folder = path
     return path
 
 
 def get_default_user_presets_folder() -> Path:
+    global _default_user_presets
+    if _default_user_presets is not None:
+        return _default_user_presets
     path = get_extension_user_folder().joinpath(USER_PRESETS_DIR_NAME)
     path.mkdir(parents=True, exist_ok=True)
+    _default_user_presets = path
     return path
 
 
@@ -159,12 +182,21 @@ def get_default_preset_path() -> Path | None:
 
 
 def _asset_preset_key(asset_path: Path) -> Path:
+    global _resource_dir_resolved
     asset = Path(asset_path)
+    raw = asset.as_posix()
+    hit = _asset_preset_key_memo.get(raw)
+    if hit is not None:
+        return hit
     try:
-        rel = asset.resolve().relative_to(get_resource_dir().resolve())
-        return rel.with_suffix("")
+        if _resource_dir_resolved is None:
+            _resource_dir_resolved = get_resource_dir().resolve()
+        rel = asset.resolve().relative_to(_resource_dir_resolved)
+        key = rel.with_suffix("")
     except (ValueError, OSError):
-        return Path(asset.stem)
+        key = Path(asset.stem)
+    _asset_preset_key_memo[raw] = key
+    return key
 
 
 def get_asset_preset_dir(asset_path: Path, *, custom_presets_root: str | None = None) -> Path:

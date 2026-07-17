@@ -98,10 +98,16 @@ class Preferences(bpy.types.AddonPreferences):
         translation_context=PROP_TCTX,
     )
 
+    def update_presets_folder(self, context):
+        from ..coloring import catalog
+
+        catalog.invalidate()
+
     use_custom_presets_path: bpy.props.BoolProperty(
         name="Use custom presets folder",
         description="Save user presets to a custom folder instead of the default",
         default=False,
+        update=update_presets_folder,
         translation_context=PROP_TCTX,
     )
 
@@ -110,6 +116,7 @@ class Preferences(bpy.types.AddonPreferences):
         description="Folder for user-saved presets when custom path is enabled",
         subtype="DIR_PATH",
         default="",
+        update=update_presets_folder,
         translation_context=PROP_TCTX,
     )
 

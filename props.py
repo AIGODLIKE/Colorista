@@ -64,8 +64,12 @@ class Props(bpy.types.PropertyGroup):
         return catalog.list_assets(self.pre_dir, context)
 
     def get_asset_path(self, context) -> str:
+        current = self.asset
+        # Enum identifiers are full .blend paths; skip re-listing on the hot path.
+        if current and current.lower().endswith(".blend"):
+            return current
         items = self.asset_items(context)
-        return catalog.resolve_enum_value(items, self.asset)
+        return catalog.resolve_enum_value(items, current)
 
     def update_asset(self, context):
         if session.suppress_asset_import:
