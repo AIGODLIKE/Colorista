@@ -2,9 +2,6 @@
 
 import bpy
 
-from ...utils.compat import IS_BL5
-from ...utils.node import get_comp_node_tree
-
 
 def _get_window_screen(context: bpy.types.Context) -> bpy.types.Screen | None:
     window = context.window
@@ -54,10 +51,4 @@ def toggle_viewport_shading(context: bpy.types.Context | None = None) -> None:
 
 
 def clear_compositor(scene: bpy.types.Scene) -> None:
-    if IS_BL5:
-        scene.compositing_node_group = None
-        return
-    tree = get_comp_node_tree(scene)
-    if tree is not None:
-        tree.nodes.clear()
-    scene.use_nodes = False
+    scene.compositing_node_group = None

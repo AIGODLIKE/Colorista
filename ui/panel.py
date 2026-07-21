@@ -6,7 +6,6 @@ from ..coloring.compositor.ui_nodes import (
     node_panel_id,
 )
 from ..coloring.constants import PANEL_TCTX
-from ..utils.compat import IS_BL42_PLUS
 from ..utils.icon import Icon
 from ..utils.node import get_comp_node_tree, scene_uses_compositor
 from ..preferences import get_pref
@@ -50,7 +49,7 @@ class ColoringPanel(bpy.types.Panel):
         for node, sockets in iter_ui_coloring_nodes(comp_tree):
             if len(node.inputs) == 0:
                 continue
-            panel_id = node_panel_id(comp_tree, node)
+            panel_id = node_panel_id(node)
             header, body = draw_layout_panel(layout, panel_id, default_closed=False)
             if node.type != "GROUP":
                 header.label(text=node.name)
@@ -68,9 +67,7 @@ class ColoringPanel(bpy.types.Panel):
                 first_panel = False
             if not body:
                 continue
-            from ..utils.compat import layout_separator
-
-            layout_separator(body)
+            body.separator(type="LINE")
             node.draw_buttons(context, body)
             bbox = body
             for inp in sockets:
@@ -97,18 +94,17 @@ class ColoringPanel(bpy.types.Panel):
         row.alert = enabled
         row.prop(prop, "enable_coloring", toggle=True, icon=Icon.ui("QUIT"), text="")
 
-        if IS_BL42_PLUS:
-            auto = render.compositor_precision == "AUTO"
-            row.alert = enabled and not auto
-            icon = Icon.resource("precision50.png" if auto else "precision100.png")
-            row.operator(ColoristaSwitchPrecision.bl_idname, icon_value=icon, text="")
+        auto = render.compositor_precision == "AUTO"
+        row.alert = enabled and not auto
+        icon = Icon.resource("precision50.png" if auto else "precision100.png")
+        row.operator(ColoristaSwitchPrecision.bl_idname, icon_value=icon, text="")
 
-            gpu = render.compositor_device == "GPU"
-            row.alert = enabled and gpu
-            icon = Icon.resource("gpu.png" if gpu else "cpu.png")
-            row.operator(ColoristaSwitchDevice.bl_idname, icon_value=icon, text="")
+        gpu = render.compositor_device == "GPU"
+        row.alert = enabled and gpu
+        icon = Icon.resource("gpu.png" if gpu else "cpu.png")
+        row.operator(ColoristaSwitchDevice.bl_idname, icon_value=icon, text="")
 
-            row.alert = False
+        row.alert = False
         pref = get_pref()
         if pref:
             row.alert = enabled and pref.use_asset_color_space_pref

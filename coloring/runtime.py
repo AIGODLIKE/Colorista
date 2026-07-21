@@ -6,6 +6,7 @@ from .session import session
 
 _active = False
 _load_post_registered = False
+_bootstrap_timer_registered = False
 
 
 def is_active() -> bool:
@@ -69,15 +70,23 @@ def _refresh_history_ui(context: bpy.types.Context | None = None) -> None:
 
 @bpy.app.handlers.persistent
 def _on_file_load(_scene):
+    # References into the previous file (node groups, binding target trees,
+    # last-loaded keys) are all invalid now; drop them before touching data.
+    session.clear_loaded_preset()
     session.loaded_node_groups.clear()
     from . import history
 
     history.clear_baseline()
     try:
         ensure_coloring_content(bpy.context)
+        from .compositor.handlers import ColoristaDepsgraphMonitor
+
+        ColoristaDepsgraphMonitor.refresh(bpy.context.scene)
         _refresh_history_ui(bpy.context)
-    except AttributeError:
-        pass
+    except Exception:
+        from ..utils.logger import logger
+
+        logger.exception("Colorista file-load restore failed")
 
 
 def _register_load_post():
@@ -101,6 +110,12 @@ def _unregister_load_post():
 
 def bootstrap_coloring_state():
     try:
+        # Preference values are only reliable after registration completes;
+        # restore the opt-in logging state here instead of in register().
+        from ..utils.logger import configure_logger
+        from .config import get_config
+
+        configure_logger(get_config().enable_logging)
         ensure_coloring_content(bpy.context)
         _refresh_history_ui(bpy.context)
     except Exception:
@@ -108,6 +123,8 @@ def bootstrap_coloring_state():
 
 
 def _deferred_bootstrap():
+    global _bootstrap_timer_registered
+    _bootstrap_timer_registered = False
     bootstrap_coloring_state()
     return None
 
@@ -119,13 +136,11 @@ def activate() -> None:
     _active = True
 
     from .compositor.handlers import (
-        DepsgraphPostHandler,
+        ColoristaDepsgraphMonitor,
         RenderHandler,
         configure_handlers,
         restore_render_device,
         switch_to_cpu_device,
-        update_custom_vt,
-        update_node_group,
     )
     from .config import get_config
 
@@ -135,11 +150,12 @@ def activate() -> None:
         force_use_cpu=lambda: get_config().force_use_cpu_render_image,
     )
 
-    DepsgraphPostHandler.add(update_node_group)
-    DepsgraphPostHandler.add(update_custom_vt)
-    DepsgraphPostHandler.register()
-    RenderHandler.add(switch_to_cpu_device, "pre")
+    ColoristaDepsgraphMonitor.refresh(bpy.context.scene)
+    ColoristaDepsgraphMonitor.register()
+    # Stash/force on render_init (once per job); restore on either outcome.
+    RenderHandler.add(switch_to_cpu_device, "init")
     RenderHandler.add(restore_render_device, "complete")
+    RenderHandler.add(restore_render_device, "cancel")
     RenderHandler.register()
 
 
@@ -149,19 +165,27 @@ def deactivate(context: bpy.types.Context | None = None, *, clear_tree: bool = F
     from .compositor.viewport import clear_compositor, set_viewport_shading
 
     if _active:
-        from .compositor.handlers import DepsgraphPostHandler, RenderHandler
+        from .compositor.handlers import ColoristaDepsgraphMonitor, RenderHandler
 
-        DepsgraphPostHandler.unregister()
+        ColoristaDepsgraphMonitor.unregister()
         RenderHandler.unregister()
         _active = False
 
     if clear_tree:
+        from .compositor.load import remove_orphan_node_groups
+        from ..utils.logger import logger
+
         try:
             scene = (context or bpy.context).scene
             clear_compositor(scene)
             set_viewport_shading("DISABLED", context)
         except Exception:
             pass
+        try:
+            remove_orphan_node_groups(session.loaded_node_groups)
+        except Exception:
+            logger.exception("Failed to purge Colorista node groups")
+        session.loaded_node_groups.clear()
 
     from ..utils.timer import Timer
 
@@ -174,13 +198,23 @@ def deactivate(context: bpy.types.Context | None = None, *, clear_tree: bool = F
 
 
 def register():
+    global _bootstrap_timer_registered
+    # load_post must stay registered while the extension is enabled: coloring
+    # state is stored per scene, so opening a file with coloring on has to
+    # reactivate the (otherwise deferred) depsgraph/render handlers.
     _register_load_post()
-    bpy.app.timers.register(_deferred_bootstrap, first_interval=0)
+    if not _bootstrap_timer_registered:
+        bpy.app.timers.register(_deferred_bootstrap, first_interval=0)
+        _bootstrap_timer_registered = True
 
 
 def unregister():
+    global _bootstrap_timer_registered
     try:
         deactivate(bpy.context, clear_tree=False)
     except Exception:
         deactivate(None, clear_tree=False)
     _unregister_load_post()
+    if _bootstrap_timer_registered and bpy.app.timers.is_registered(_deferred_bootstrap):
+        bpy.app.timers.unregister(_deferred_bootstrap)
+    _bootstrap_timer_registered = False

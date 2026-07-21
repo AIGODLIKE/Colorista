@@ -10,6 +10,7 @@ from .compositor import load as load_mod
 from .constants import PRESET_NONE_ID
 from .session import preset_key, session
 from ..src.translate import _T
+from ..utils.logger import logger
 from ..utils.node import scene_uses_compositor
 from ..utils.timer import Timer
 from . import catalog, history, runtime
@@ -39,8 +40,6 @@ def _flush_scheduled_load() -> None:
     try:
         load(bpy.context, **kwargs)
     except Exception:
-        from ..utils.logger import logger
-
         logger.exception("Deferred compositor import failed")
 
 
@@ -108,16 +107,27 @@ def load(
     captured = False
     if cache and cfg.cache_current_compositor:
         captured = _capture_history(context)
-    ok = load_mod.load(
-        context,
-        path=path,
-        preset=preset,
-        use_default=use_default,
-        force=force,
-        reporter=reporter,
-        use_asset_color_space=cfg.use_asset_color_space_pref,
-        sync_asset_enum=_sync_asset_enum,
-    )
+    try:
+        ok = load_mod.load(
+            context,
+            path=path,
+            preset=preset,
+            use_default=use_default,
+            force=force,
+            reporter=reporter,
+            use_asset_color_space=cfg.use_asset_color_space_pref,
+            sync_asset_enum=_sync_asset_enum,
+        )
+    except Exception:
+        # Last-resort guard: a corrupt asset must never leave a Python
+        # traceback in an operator or a property update callback.
+        logger.exception("Compositor load failed: %s", path or preset)
+        if reporter is not None:
+            reporter(
+                {"ERROR"},
+                _T("Failed to load compositor from {}").format(path or preset or ""),
+            )
+        ok = False
     if ok:
         if captured:
             history.commit_capture(context)

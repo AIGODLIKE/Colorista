@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .timer import Timer
 from .watcher import FSWatcher
+
+if TYPE_CHECKING:
+    import bpy
 
 _UI_ICON_NAMES: frozenset[str] | None = None
 _FALLBACK_UI_ICON = "ERROR"
@@ -25,18 +29,16 @@ def _ui_icon_names() -> frozenset[str]:
 
 
 class PrevMgr:
-    import bpy
-    __PREV__: dict[int, "bpy.utils.previews.ImagePreviewCollection"] = {}
+    """Track live preview collections so cleanup() can free them all."""
+
+    __PREV__: dict[int, bpy.utils.previews.ImagePreviewCollection] = {}
 
     @staticmethod
-    def new() -> "bpy.utils.previews.ImagePreviewCollection":
+    def new() -> bpy.utils.previews.ImagePreviewCollection:
         import bpy.utils.previews
-        import random
 
         prev = bpy.utils.previews.new()
-        while (i := random.randint(0, 999999999)) in PrevMgr.__PREV__:
-            continue
-        PrevMgr.__PREV__[i] = prev
+        PrevMgr.__PREV__[id(prev)] = prev
         return prev
 
     @staticmethod
@@ -46,22 +48,26 @@ class PrevMgr:
         try:
             bpy.utils.previews.remove(prev)
         except Exception:
+            # Cleanup runs during unregister; it must never propagate.
             pass
-        for key, value in list(PrevMgr.__PREV__.items()):
-            if value is prev:
-                del PrevMgr.__PREV__[key]
+        PrevMgr.__PREV__.pop(id(prev), None)
 
 
-class MetaIn(type):
-    def __contains__(cls, name):
-        return cls.__contains__(cls, name)
+class _IconMeta(type):
+    """Enables ``path in Icon`` and ``Icon[path]`` on the class itself."""
+
+    def __contains__(cls, name) -> bool:
+        if cls.PREV_DICT is None:
+            return False
+        return FSWatcher.to_str(name) in cls._ensure_prev()
+
+    def __getitem__(cls, name) -> int:
+        return cls.get_icon_id(name)
 
 
-class Icon(metaclass=MetaIn):
+class Icon(metaclass=_IconMeta):
     PREV_DICT = None
-    NONE_IMAGE = ""
     IMG_STATUS = {}
-    INSTANCE = None
     _VALIDATED: set[str] = set()
     _RELOAD_SCHEDULED: set[str] = set()
     _RELOAD_RETRY: dict[str, int] = {}
@@ -76,27 +82,6 @@ class Icon(metaclass=MetaIn):
             cls.PREV_DICT = PrevMgr.new()
         return cls.PREV_DICT
 
-    def __init__(self) -> None:
-        if Icon.NONE_IMAGE and Icon.NONE_IMAGE not in Icon:
-            Icon.NONE_IMAGE = FSWatcher.to_str(Icon.NONE_IMAGE)
-            self.reg_icon(Icon.NONE_IMAGE)
-
-    def __new__(cls, *args, **kwargs):
-        if cls.INSTANCE is None:
-            cls.INSTANCE = object.__new__(cls, *args, **kwargs)
-        return cls.INSTANCE
-
-    @staticmethod
-    def clear():
-        prev = Icon._ensure_prev()
-        prev.clear()
-        Icon.IMG_STATUS.clear()
-        Icon._VALIDATED.clear()
-        Icon._RELOAD_SCHEDULED.clear()
-        Icon._RELOAD_RETRY.clear()
-        if Icon.NONE_IMAGE:
-            Icon.reg_icon(Icon.NONE_IMAGE)
-
     @staticmethod
     def cleanup():
         Icon._generation += 1
@@ -107,8 +92,6 @@ class Icon(metaclass=MetaIn):
         Icon._VALIDATED.clear()
         Icon._RELOAD_SCHEDULED.clear()
         Icon._RELOAD_RETRY.clear()
-        Icon.NONE_IMAGE = ""
-        Icon.INSTANCE = None
 
     @staticmethod
     def try_mark_image(path) -> bool:
@@ -137,14 +120,6 @@ class Icon(metaclass=MetaIn):
         if Icon.PREV_DICT is not None:
             Icon.PREV_DICT.pop(name, None)
         return True
-
-    @staticmethod
-    def reg_none(none: Path):
-        none = FSWatcher.to_str(none)
-        if none in Icon:
-            return
-        Icon.NONE_IMAGE = none
-        Icon.reg_icon(Icon.NONE_IMAGE)
 
     @staticmethod
     def reg_icon(path, reload=False):
@@ -247,24 +222,8 @@ class Icon(metaclass=MetaIn):
         bpy.app.timers.register(_reload, first_interval=Icon._RELOAD_DELAY)
 
     @staticmethod
-    def get_icon_id(name: Path):
-        import bpy
-
+    def get_icon_id(name: Path) -> int:
         if Icon.PREV_DICT is None:
             return 0
-        prev = Icon._ensure_prev()
-        p: bpy.types.ImagePreview = prev.get(FSWatcher.to_str(name), None)
-        if not p:
-            p = prev.get(FSWatcher.to_str(Icon.NONE_IMAGE), None)
-        return p.icon_id if p else 0
-
-    def __getitem__(self, name):
-        return Icon.get_icon_id(name)
-
-    def __contains__(self, name):
-        if Icon.PREV_DICT is None:
-            return False
-        return FSWatcher.to_str(name) in Icon._ensure_prev()
-
-    def __class_getitem__(cls, name):
-        return cls.__getitem__(cls, name)
+        preview = Icon._ensure_prev().get(FSWatcher.to_str(name), None)
+        return preview.icon_id if preview else 0

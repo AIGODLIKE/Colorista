@@ -273,9 +273,9 @@ class CompositorNodeTreeImport(bpy.types.Operator):
     bl_translation_context = OPS_TCTX
     bl_options = {"REGISTER", "UNDO"}
 
-    use_default: bpy.props.BoolProperty(default=False)
-    preset: bpy.props.StringProperty(default="")
-    no_cache: bpy.props.BoolProperty(default=False)
+    use_default: bpy.props.BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"})
+    preset: bpy.props.StringProperty(default="", options={"HIDDEN", "SKIP_SAVE"})
+    no_cache: bpy.props.BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"})
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:

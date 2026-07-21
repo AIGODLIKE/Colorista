@@ -10,6 +10,7 @@ logs/runtime.log
 resource/CN/00Test
 resource/EN/00Test
 resource/cache
+dist/
 *.blend
 *.json
 /.cursor

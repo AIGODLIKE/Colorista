@@ -3,7 +3,7 @@
 import bpy
 
 
-def node_panel_id(tree: bpy.types.NodeTree, node: bpy.types.Node) -> str:
+def node_panel_id(node: bpy.types.Node) -> str:
     return f"colorista_{node.name}"
 
 
@@ -42,7 +42,4 @@ def iter_ui_coloring_nodes(tree: bpy.types.NodeTree | None):
 
 
 def draw_layout_panel(layout, panel_id: str, default_closed: bool = False):
-    try:
-        return layout.panel(idname=panel_id, default_closed=default_closed)
-    except TypeError:
-        return layout.panel(panel_id, default_closed=default_closed)
+    return layout.panel(panel_id, default_closed=default_closed)
