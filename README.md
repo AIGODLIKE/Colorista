@@ -8,6 +8,8 @@
 
 A convenient color grading add-on for colorists. Build AgX color grading panels in one click and preview results in real time in the viewport.
 
+Requires Blender 5.1 or newer.
+
 ---
 
 ## Features

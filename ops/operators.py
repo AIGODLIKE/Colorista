@@ -4,6 +4,7 @@ from pathlib import Path
 
 import bpy
 
+from ..coloring.compositor.device import set_compositor_device
 from ..coloring.constants import OPS_TCTX, PRESET_NONE_ID
 from ..coloring.preset.io import save_compositor_values_json
 from ..src.translate import _T
@@ -52,10 +53,8 @@ class ColoristaSavePreset(bpy.types.Operator):
         layout = self.layout
         path = self.get_preset_path(context)
         layout.alert = True
-        layout.label(
-            text=_T("Overwrite preset: {}?").format(path.stem),
-            icon=Icon.ui("QUESTION"),
-        )
+        layout.label(text=_T("Overwrite this preset?"), icon=Icon.ui("QUESTION"))
+        layout.label(text=path.stem, translate=False)
 
     def get_preset_path(self, context: bpy.types.Context | None = None):
         context = context or bpy.context
@@ -81,7 +80,7 @@ class ColoristaSavePreset(bpy.types.Operator):
             self.report({"ERROR"}, _T("Preset path is outside the user presets folder"))
             return {"CANCELLED"}
         if path and path.exists() and self.popup:
-            return wm.invoke_props_dialog(self, width=200)
+            return wm.invoke_props_dialog(self, width=320)
         return self.execute(context)
 
     def execute(self, context: bpy.types.Context):
@@ -131,13 +130,13 @@ class ColoristaDeletePreset(bpy.types.Operator):
         asset = Path(context.scene.colorista_prop.get_asset_path(context)).stem
         preset = Path(context.scene.colorista_prop.get_preset_path(context)).stem
         layout.alert = True
-        layout.label(
-            text=_T('Delete preset "{}" for asset "{}"?').format(preset, asset),
-            icon=Icon.ui("TRASH"),
-        )
+        layout.label(text=_T("Delete this preset?"), icon=Icon.ui("TRASH"))
+        col = layout.column(align=True)
+        col.label(text=_T("Preset: {}").format(preset), translate=False)
+        col.label(text=_T("Asset: {}").format(asset), translate=False)
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
-        return context.window_manager.invoke_props_dialog(self, width=200)
+        return context.window_manager.invoke_props_dialog(self, width=320)
 
     def execute(self, context: bpy.types.Context):
         path = Path(context.scene.colorista_prop.get_preset_path(context))
@@ -167,10 +166,8 @@ class ColoristaSwitchDevice(bpy.types.Operator):
 
     def execute(self, context):
         render = context.scene.render
-        if render.compositor_device == "GPU":
-            render.compositor_device = "CPU"
-        else:
-            render.compositor_device = "GPU"
+        device = "CPU" if render.compositor_device == "GPU" else "GPU"
+        set_compositor_device(render, device)
         return {"FINISHED"}
 
 
@@ -273,9 +270,9 @@ class CompositorNodeTreeImport(bpy.types.Operator):
     bl_translation_context = OPS_TCTX
     bl_options = {"REGISTER", "UNDO"}
 
-    use_default: bpy.props.BoolProperty(default=False)
-    preset: bpy.props.StringProperty(default="")
-    no_cache: bpy.props.BoolProperty(default=False)
+    use_default: bpy.props.BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"})
+    preset: bpy.props.StringProperty(default="", options={"HIDDEN", "SKIP_SAVE"})
+    no_cache: bpy.props.BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"})
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:

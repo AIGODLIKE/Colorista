@@ -2,11 +2,11 @@ import bpy
 
 from ..coloring.compositor.ui_nodes import (
     draw_layout_panel,
+    iter_ui_node_input_sections,
     iter_ui_coloring_nodes,
     node_panel_id,
 )
 from ..coloring.constants import PANEL_TCTX
-from ..utils.compat import IS_BL42_PLUS
 from ..utils.icon import Icon
 from ..utils.node import get_comp_node_tree, scene_uses_compositor
 from ..preferences import get_pref
@@ -50,7 +50,7 @@ class ColoringPanel(bpy.types.Panel):
         for node, sockets in iter_ui_coloring_nodes(comp_tree):
             if len(node.inputs) == 0:
                 continue
-            panel_id = node_panel_id(comp_tree, node)
+            panel_id = node_panel_id(node)
             header, body = draw_layout_panel(layout, panel_id, default_closed=False)
             if node.type != "GROUP":
                 header.label(text=node.name)
@@ -68,20 +68,42 @@ class ColoringPanel(bpy.types.Panel):
                 first_panel = False
             if not body:
                 continue
-            from ..utils.compat import layout_separator
-
-            layout_separator(body)
             node.draw_buttons(context, body)
-            bbox = body
-            for inp in sockets:
-                if inp.name.startswith("——"):
-                    bbox = body.box()
-                    row = bbox.row()
-                    row.alert = True
-                    row.alignment = "CENTER"
-                    row.label(text=inp.name)
-                    continue
-                bbox.template_node_view(comp_tree, node, inp)
+            sections = list(iter_ui_node_input_sections(node, sockets))
+            grouped = len(sections) > 1 or (
+                sections and sections[0][0] is not None
+            )
+            if grouped:
+                for section_id, section_label, section_sockets in sections:
+                    section_header, section_body = draw_layout_panel(
+                        body,
+                        f"{panel_id}_{section_id}",
+                        default_closed=False,
+                    )
+                    section_header.label(text=section_label)
+                    if not section_body:
+                        continue
+                    self._draw_node_inputs(
+                        section_body,
+                        comp_tree,
+                        node,
+                        section_sockets,
+                    )
+            elif sections:
+                self._draw_node_inputs(body, comp_tree, node, sections[0][2])
+
+    @staticmethod
+    def _draw_node_inputs(layout, tree, node, sockets):
+        bbox = layout
+        for inp in sockets:
+            if inp.name.startswith("——"):
+                bbox = layout.box()
+                row = bbox.row()
+                row.alert = True
+                row.alignment = "CENTER"
+                row.label(text=inp.name)
+                continue
+            bbox.template_node_view(tree, node, inp)
 
     def draw_header(self, context: bpy.types.Context):
         row = self.layout.row(align=True)
@@ -97,18 +119,17 @@ class ColoringPanel(bpy.types.Panel):
         row.alert = enabled
         row.prop(prop, "enable_coloring", toggle=True, icon=Icon.ui("QUIT"), text="")
 
-        if IS_BL42_PLUS:
-            auto = render.compositor_precision == "AUTO"
-            row.alert = enabled and not auto
-            icon = Icon.resource("precision50.png" if auto else "precision100.png")
-            row.operator(ColoristaSwitchPrecision.bl_idname, icon_value=icon, text="")
+        auto = render.compositor_precision == "AUTO"
+        row.alert = enabled and not auto
+        icon = Icon.resource("precision50.png" if auto else "precision100.png")
+        row.operator(ColoristaSwitchPrecision.bl_idname, icon_value=icon, text="")
 
-            gpu = render.compositor_device == "GPU"
-            row.alert = enabled and gpu
-            icon = Icon.resource("gpu.png" if gpu else "cpu.png")
-            row.operator(ColoristaSwitchDevice.bl_idname, icon_value=icon, text="")
+        gpu = render.compositor_device == "GPU"
+        row.alert = enabled and gpu
+        icon = Icon.resource("gpu.png" if gpu else "cpu.png")
+        row.operator(ColoristaSwitchDevice.bl_idname, icon_value=icon, text="")
 
-            row.alert = False
+        row.alert = False
         pref = get_pref()
         if pref:
             row.alert = enabled and pref.use_asset_color_space_pref

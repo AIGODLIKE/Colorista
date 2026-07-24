@@ -5,12 +5,11 @@ from ..coloring.constants import OPS_TCTX
 from ..preferences import get_pref
 
 
-def calc_widget_unit():
-    context = bpy.context
-    pixel_size = bpy.context.preferences.system.pixel_size
-    scale_factor = context.preferences.system.dpi / 72
-    widget_unit = round(18 * scale_factor + 0.00001) + (2 * pixel_size)
-    return widget_unit
+def calc_widget_unit(context: bpy.types.Context) -> float:
+    """Match Blender's U.widget_unit (interface_intern DPI math)."""
+    system = context.preferences.system
+    scale_factor = system.dpi / 72
+    return round(18 * scale_factor + 0.00001) + (2 * system.pixel_size)
 
 
 # Matches Blender view3d_gizmo_navigate.cc
@@ -58,7 +57,9 @@ def _icon_offset_from_axis(context: bpy.types.Context, icon_offset_mini: float) 
     if view_pref.mini_axis_type == "GIZMO":
         return icon_offset * 2.2
     if view_pref.mini_axis_type == "MINIMAL":
-        return (calc_widget_unit() * 2.0) + (view_pref.mini_axis_size * ui_scale * 1.6)
+        return (calc_widget_unit(context) * 2.0) + (
+            view_pref.mini_axis_size * ui_scale * 1.6
+        )
     return icon_offset_mini * 0.75
 
 
@@ -90,7 +91,8 @@ class ColoristaGzOps(bpy.types.Operator):
     bl_label = "Toggle viewport compositor"
     bl_description = "Toggle viewport compositor for this window"
     bl_translation_context = OPS_TCTX
-    bl_options = {"REGISTER", "UNDO"}
+    # View setting only: an UNDO push here would add no-op steps to the stack.
+    bl_options = {"REGISTER"}
 
     @classmethod
     def poll(cls, context):

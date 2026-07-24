@@ -206,12 +206,19 @@ def sync_ui_list(context: bpy.types.Context | None = None, *, entries: list[Hist
 
 
 def refresh_from_disk(context: bpy.types.Context | None = None) -> None:
-    """Rebuild index from files, trim to limit, and refresh UI."""
-    cache_dir = get_user_cache_dir()
-    entries = _rebuild_index_from_files(cache_dir)
-    cfg = get_config()
-    entries = _trim_entries(entries, cfg.cache_current_cache_count)
-    _save_index(entries, cache_dir)
+    """Re-sync entries with disk, trim to limit, and refresh UI.
+
+    Runs on every file load: uses the index fast path (it already drops
+    entries whose files vanished and rebuilds itself when corrupt) instead
+    of re-reading and re-hashing every history JSON.
+    """
+    try:
+        cache_dir = get_user_cache_dir()
+        entries = _trim_entries(_load_index(cache_dir), get_config().cache_current_cache_count)
+        _save_index(entries, cache_dir)
+    except OSError:
+        logger.exception("History refresh failed")
+        entries = []
     sync_ui_list(context, entries=entries)
 
 
@@ -434,7 +441,11 @@ def _commit_snapshot(snap: _PendingSnapshot, context: bpy.types.Context) -> None
 
 
 def apply_limit_change(context: bpy.types.Context | None = None) -> None:
-    cache_dir = get_user_cache_dir()
-    entries = _trim_entries(_load_index(cache_dir), get_config().cache_current_cache_count)
-    _save_index(entries, cache_dir)
+    try:
+        cache_dir = get_user_cache_dir()
+        entries = _trim_entries(_load_index(cache_dir), get_config().cache_current_cache_count)
+        _save_index(entries, cache_dir)
+    except OSError:
+        logger.exception("History limit change failed")
+        return
     sync_ui_list(context, entries=entries)

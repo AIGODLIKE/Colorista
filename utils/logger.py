@@ -2,7 +2,8 @@ import logging
 from logging import handlers
 from pathlib import Path
 
-NAME = __package__
+# Short name for console prefixes: "Colorista", not "bl_ext.<repo>.Colorista.utils".
+NAME = __package__.rsplit(".", 1)[0].rsplit(".", 1)[-1]
 
 FMTDICT = {
     'DEBUG': ["[36m", "DBG"],

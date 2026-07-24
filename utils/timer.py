@@ -51,7 +51,7 @@ class Timer:
 
     @classmethod
     def reg(cls):
-        bpy.app.timers.register(cls.run, persistent=True)
+        bpy.app.timers.register(cls.run)
 
     @classmethod
     def unreg(cls):
@@ -59,8 +59,8 @@ class Timer:
         cls._registered = False
         try:
             bpy.app.timers.unregister(cls.run)
-        except Exception:
-            ...
+        except (ValueError, RuntimeError):
+            pass
 
 
 def register():

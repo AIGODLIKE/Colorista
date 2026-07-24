@@ -7,13 +7,25 @@ from pathlib import Path
 import bpy
 
 from ...src.translate import _T
-from ...utils.compat import IS_BL42_TO_43, IS_BL5
 from ...utils.logger import logger
-from ...utils.node import ensure_comp_node_tree, get_comp_node_tree, scene_uses_compositor
+from ...utils.node import get_comp_node_tree, scene_uses_compositor
 from ...utils.paths import get_default_preset_path
 from ..session import preset_key, session
-from .handlers import update_custom_vt, update_node_group
-from .transfer import reload_drivers, reset_driver_with_scene_ref, transfer_compositor
+from .handlers import (
+    ColoristaMsgBusMonitor,
+    update_custom_vt,
+    update_node_group,
+)
+from .transfer import (
+    extract_root_input_bindings,
+    materialize_root_input_bindings,
+    reload_drivers,
+    remove_invalid_drivers,
+    reset_driver_with_scene_ref,
+    store_driver_bindings,
+    transfer_compositor,
+    upgrade_native_bindings,
+)
 from .viewport import set_viewport_shading
 
 
@@ -27,23 +39,7 @@ def _report(reporter, type_set, message: str) -> None:
         logger.error("%s", message)
 
 
-def _rsc_used(rsc) -> bool:
-    try:
-        return (rsc.users >= 1 and not rsc.use_fake_user) or rsc.users >= 2
-    except ReferenceError:
-        return False
-
-
 def _load_compositor_scene(path: str):
-    for group in list(session.loaded_node_groups):
-        if _rsc_used(group):
-            continue
-        session.loaded_node_groups.discard(group)
-        try:
-            bpy.data.node_groups.remove(group)
-        except ReferenceError:
-            pass
-
     old_groups = set(bpy.data.node_groups)
     old_scenes = set(bpy.data.scenes)
     load_sce_name = "AC-Coloring"
@@ -65,7 +61,6 @@ def _load_compositor_scene(path: str):
 
 
 def _load_compositor_sce(preset, context: bpy.types.Context):
-    ensure_comp_node_tree(context.scene)
     data_path = Path(preset)
     if not data_path.exists():
         return None
@@ -80,21 +75,11 @@ def _finish_load(sce: bpy.types.Scene, label: str) -> bool:
     logger.info(_T("Loaded compositor: {}").format(label))
     update_node_group(sce)
     update_custom_vt(sce)
+    ColoristaMsgBusMonitor.refresh(sce)
     return True
 
 
-def _collect_nested_node_groups(tree, out: set) -> None:
-    if tree is None:
-        return
-    for node in tree.nodes:
-        if node.type == "GROUP" and node.node_tree:
-            nt = node.node_tree
-            if nt not in out:
-                out.add(nt)
-                _collect_nested_node_groups(nt, out)
-
-
-def _remove_orphan_node_groups(groups: set) -> None:
+def remove_orphan_node_groups(groups: set) -> None:
     pending = set(groups)
     for _ in range(max(1, len(pending))):
         if not pending:
@@ -112,25 +97,15 @@ def _remove_orphan_node_groups(groups: set) -> None:
             break
 
 
-def _purge_compositor_before_reload(context: bpy.types.Context) -> None:
-    """Detach and remove prior Colorista compositor data before library append."""
-    sce = context.scene
-    to_remove = set(session.loaded_node_groups)
+def _remove_loaded_scenes(scenes: set[bpy.types.Scene]) -> None:
+    """Remove temporary scenes appended from a compositor asset.
 
-    if IS_BL5:
-        root = sce.compositing_node_group
-        if root is not None:
-            to_remove.add(root)
-            _collect_nested_node_groups(root, to_remove)
-        sce.compositing_node_group = None
-    else:
-        tree = get_comp_node_tree(sce)
-        if tree is not None:
-            _collect_nested_node_groups(tree, to_remove)
-            tree.nodes.clear()
-
-    session.loaded_node_groups.clear()
-    _remove_orphan_node_groups(to_remove)
+    The tree must be detached first: removing a scene that still references
+    the (now shared) tree triggers a Blender 5.1/5.2 ID-user bug.
+    """
+    for scene in scenes:
+        scene.compositing_node_group = None
+        bpy.data.scenes.remove(scene)
 
 
 def load_asset(
@@ -141,11 +116,12 @@ def load_asset(
 ) -> bool:
     """Load .blend topology into the current scene compositor."""
     sce = context.scene
-    if IS_BL42_TO_43:
-        sce.render.compositor_device = "GPU"
     set_viewport_shading("ALWAYS", context)
-    _purge_compositor_before_reload(context)
-    ensure_comp_node_tree(sce)
+    # Groups from the previous load stay in place until the new tree replaces
+    # them (removing them up front hits the 5.1/5.2 ID-user bug); they are
+    # cleaned up as orphans at the end of this load.
+    previous_groups = set(session.loaded_node_groups)
+    session.loaded_node_groups.clear()
     old_nts = set(bpy.data.node_groups)
     load_sce = _load_compositor_sce(blend_path, context)
     if not load_sce:
@@ -156,19 +132,31 @@ def load_asset(
         context,
         use_asset_color_space=use_asset_color_space,
     )
+    current_tree = get_comp_node_tree(sce)
+    if current_tree is None or current_tree not in new_nts:
+        # Asset had no usable compositor tree: roll the append back.
+        logger.error("No compositor tree found in asset: %s", blend_path)
+        _remove_loaded_scenes(load_sce)
+        remove_orphan_node_groups(new_nts)
+        session.loaded_node_groups.clear()
+        session.loaded_node_groups.update(previous_groups)
+        return False
+    bindings = extract_root_input_bindings(new_nts, current_tree)
+    # Compile supported cross-tree formulas into native group links.
+    bindings = materialize_root_input_bindings(current_tree, bindings)
+    upgrade_native_bindings(current_tree)
+    # Preserve metadata only for targets a future migration may support.
+    store_driver_bindings(current_tree, bindings)
     for nt in new_nts:
         reset_driver_with_scene_ref(nt.animation_data, load_sce)
-    for ls in load_sce:
-        bpy.data.scenes.remove(ls)
-    current_tree = get_comp_node_tree(sce)
-    if current_tree is not None:
-        new_nts.add(current_tree)
+    _remove_loaded_scenes(load_sce)
     for nt in list(new_nts):
         try:
-            if nt is not None:
-                reload_drivers(nt.animation_data)
+            reload_drivers(nt.animation_data)
         except ReferenceError:
             continue
+    remove_invalid_drivers(new_nts, sce)
+    remove_orphan_node_groups(previous_groups)
     session.set_loaded_asset(blend_path)
     return True
 
@@ -290,4 +278,3 @@ def load(
         return False
     session.set_loaded_preset(preset_path)
     return True
-

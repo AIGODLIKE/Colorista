@@ -1,4 +1,4 @@
-"""Depsgraph / render handlers and color-space sync."""
+"""Event-driven compositor synchronization and render handlers."""
 
 from __future__ import annotations
 
@@ -9,8 +9,12 @@ import bpy
 
 from ...utils.logger import logger
 from ...utils.node import get_comp_node_tree
+from .device import set_compositor_device
 
 VTC_NAME = "colorista-Color Space"
+
+# Inner nodes bound to a group input are named "inputs[<socket index>]".
+_BOUND_NODE_RE = re.compile(r"inputs\[(\d+)\]")
 
 # Injected by coloring.runtime (keeps handlers free of prefs imports).
 _main_node_group_name_fn: Callable[[], str] | None = None
@@ -42,46 +46,91 @@ def _verbose() -> bool:
     return False
 
 
-class DepsgraphPostHandler:
-    handlers: dict = {}
+class ColoristaMsgBusMonitor:
+    """Track scene/tree replacement and the scene view transform."""
+
+    _owner = object()
+    _scene_pointer: int | None = None
+    _tree_pointer: int | None = None
     _registered = False
+    _updating = False
 
     @classmethod
-    def add(cls, handler):
-        cls.handlers[handler] = None
+    def _subscribe_property(
+        cls,
+        owner,
+        data_path: str,
+        *,
+        type_wide: bool = False,
+    ) -> bool:
+        try:
+            key = (
+                (type(owner), data_path)
+                if type_wide
+                else owner.path_resolve(data_path, False)
+            )
+            bpy.msgbus.subscribe_rna(
+                key=key,
+                owner=cls._owner,
+                args=(),
+                notify=cls.update,
+            )
+        except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+            return False
+        return True
 
     @classmethod
-    def remove(cls, handler):
-        cls.handlers.pop(handler, None)
-
-    @classmethod
-    @bpy.app.handlers.persistent
-    def update(cls, scene, deps):
-        if not scene.colorista_prop.enable_coloring:
-            return
-        for handler in cls.handlers:
-            try:
-                handler(scene)
-            except Exception:
-                logger.exception("Depsgraph handler failed")
-
-    @classmethod
-    def register(cls):
-        if cls._registered:
-            return
-        bpy.app.handlers.depsgraph_update_post.append(cls.update)
-        cls._registered = True
-
-    @classmethod
-    def unregister(cls):
+    def refresh(cls, scene: bpy.types.Scene) -> None:
+        """Subscribe only to RNA state not represented by compositor links."""
+        bpy.msgbus.clear_by_owner(cls._owner)
+        cls._scene_pointer = scene.as_pointer()
+        tree = get_comp_node_tree(scene)
+        cls._tree_pointer = tree.as_pointer() if tree is not None else None
         if not cls._registered:
             return
+
+        # Rebuild subscriptions when the compositor tree itself is replaced.
+        cls._subscribe_property(scene, "compositing_node_group", type_wide=True)
+        cls._subscribe_property(scene.view_settings, "view_transform", type_wide=True)
+
+    @classmethod
+    def update(cls) -> None:
+        if not cls._registered or cls._updating:
+            return
         try:
-            bpy.app.handlers.depsgraph_update_post.remove(cls.update)
-        except ValueError:
-            pass
+            scene = bpy.context.scene
+            props = getattr(scene, "colorista_prop", None)
+            if props is None or not props.enable_coloring:
+                return
+            tree = get_comp_node_tree(scene)
+            tree_pointer = tree.as_pointer() if tree is not None else None
+            if scene.as_pointer() != cls._scene_pointer or tree_pointer != cls._tree_pointer:
+                cls.refresh(scene)
+            if tree is None:
+                return
+        except (AttributeError, ReferenceError):
+            return
+
+        cls._updating = True
+        try:
+            update_custom_vt(scene)
+        except Exception:
+            logger.exception("Colorista view-transform synchronization failed")
+        finally:
+            cls._updating = False
+
+    @classmethod
+    def register(cls, scene: bpy.types.Scene | None = None) -> None:
+        cls._registered = True
+        cls.refresh(scene or bpy.context.scene)
+
+    @classmethod
+    def unregister(cls) -> None:
+        bpy.msgbus.clear_by_owner(cls._owner)
         cls._registered = False
-        cls.handlers.clear()
+        cls._scene_pointer = None
+        cls._tree_pointer = None
+        cls._updating = False
 
 
 def update_node_group(scene):
@@ -93,54 +142,36 @@ def update_node_group(scene):
     if not main_node_group or not main_node_group.node_tree:
         return
     for node in main_node_group.node_tree.nodes:
-        match = re.match(r"inputs\[(\d+)\]", node.name)
+        match = _BOUND_NODE_RE.match(node.name)
         if not match:
             continue
         input_index = int(match.group(1))
         if input_index < len(main_node_group.inputs):
             input_socket = main_node_group.inputs[input_index]
             input_name = input_socket.name
-            should_mute = input_socket.default_value == 0
-            if should_mute:
-                if not node.mute:
-                    node.mute = True
-                    if verbose:
-                        logger.debug(
-                            "Child node %s is blocked because the parameter is 0",
-                            node.name,
-                        )
-            else:
-                new_label = f"Bound({input_name})"
-                if node.mute:
-                    node.mute = False
-                if node.label != new_label:
-                    node.label = new_label
-                    if verbose:
-                        logger.debug("The new label for the child node is: %s", node.label)
+            # Node-socket edits do not reliably publish RNA message-bus events.
+            # Keep the native graph live and let its own value links determine
+            # the neutral/effect result instead of relying on Python to unmute.
+            new_label = f"Bound({input_name})"
+            if node.mute:
+                node.mute = False
+            if node.label != new_label:
+                node.label = new_label
+                if verbose:
+                    logger.debug("The new label for the child node is: %s", node.label)
         elif verbose:
             logger.debug("Input number %s is out of range", input_index)
 
 
 class RenderHandler:
-    _STAGES = ("pre", "post", "init", "complete")
-    handlers: dict[str, dict] = {
-        "pre": {},
-        "post": {},
-        "init": {},
-        "complete": {},
-    }
+    _STAGES = ("pre", "post", "init", "complete", "cancel")
+    # Insertion-ordered "sets" of callbacks per render stage.
+    handlers: dict[str, dict] = {stage: {} for stage in _STAGES}
     ctx = {}
     _registered = False
 
     @classmethod
-    def _ensure_stages(cls) -> None:
-        for stage in cls._STAGES:
-            if stage not in cls.handlers:
-                cls.handlers[stage] = {}
-
-    @classmethod
     def add(cls, handler, stage="pre"):
-        cls._ensure_stages()
         if stage not in cls.handlers:
             raise ValueError(f"Invalid stage: {stage}")
         cls.handlers[stage][handler] = None
@@ -166,6 +197,11 @@ class RenderHandler:
         cls.update_ex(scene, deps, "complete")
 
     @classmethod
+    @bpy.app.handlers.persistent
+    def update_cancel(cls, scene, deps):
+        cls.update_ex(scene, deps, "cancel")
+
+    @classmethod
     def update_ex(cls, scene, deps, stage):
         for handler in cls.handlers[stage]:
             try:
@@ -175,80 +211,86 @@ class RenderHandler:
 
     @classmethod
     def register(cls):
-        if cls._registered:
-            return
-        bpy.app.handlers.render_init.append(cls.update_init)
-        bpy.app.handlers.render_pre.append(cls.update_pre)
-        bpy.app.handlers.render_post.append(cls.update_post)
-        bpy.app.handlers.render_complete.append(cls.update_complete)
+        for handler_list, fn in (
+            (bpy.app.handlers.render_init, cls.update_init),
+            (bpy.app.handlers.render_pre, cls.update_pre),
+            (bpy.app.handlers.render_post, cls.update_post),
+            (bpy.app.handlers.render_complete, cls.update_complete),
+            (bpy.app.handlers.render_cancel, cls.update_cancel),
+        ):
+            if fn not in handler_list:
+                handler_list.append(fn)
         cls._registered = True
 
     @classmethod
     def unregister(cls):
-        if cls._registered:
-            for handler_list, fn in (
-                (bpy.app.handlers.render_init, cls.update_init),
-                (bpy.app.handlers.render_pre, cls.update_pre),
-                (bpy.app.handlers.render_post, cls.update_post),
-                (bpy.app.handlers.render_complete, cls.update_complete),
-            ):
-                try:
-                    handler_list.remove(fn)
-                except ValueError:
-                    pass
-            cls._registered = False
-        cls._ensure_stages()
-        for stage in cls._STAGES:
-            cls.handlers[stage].clear()
+        for handler_list, fn in (
+            (bpy.app.handlers.render_init, cls.update_init),
+            (bpy.app.handlers.render_pre, cls.update_pre),
+            (bpy.app.handlers.render_post, cls.update_post),
+            (bpy.app.handlers.render_complete, cls.update_complete),
+            (bpy.app.handlers.render_cancel, cls.update_cancel),
+        ):
+            while fn in handler_list:
+                handler_list.remove(fn)
+        cls._registered = False
+        for stage_handlers in cls.handlers.values():
+            stage_handlers.clear()
+        cls.ctx.clear()
 
 
-def switch_to_cpu_device(self: RenderHandler, scene: bpy.types.Scene):
-    self.ctx["old_compositor_device"] = scene.render.compositor_device
-    if _force_cpu_fn is not None and _force_cpu_fn():
-        scene.render.compositor_device = "CPU"
+def switch_to_cpu_device(handler_cls: type[RenderHandler], scene: bpy.types.Scene):
+    """Stash the device once per render job (render_init), not per frame.
+
+    Stashing on render_pre would overwrite the stash with the already-forced
+    "CPU" value from the second animation frame on, losing the user setting.
+    """
+    props = getattr(scene, "colorista_prop", None)
+    if props is None or not props.enable_coloring:
+        return
+    if _force_cpu_fn is None or not _force_cpu_fn():
+        return
+    if "old_compositor_device" not in handler_cls.ctx:
+        handler_cls.ctx["old_compositor_device"] = scene.render.compositor_device
+    set_compositor_device(scene.render, "CPU")
 
 
-def restore_render_device(self: RenderHandler, scene: bpy.types.Scene):
-    old = self.ctx.get("old_compositor_device")
+def restore_render_device(handler_cls: type[RenderHandler], scene: bpy.types.Scene):
+    old = handler_cls.ctx.pop("old_compositor_device", None)
     if old is not None:
-        scene.render.compositor_device = old
+        set_compositor_device(scene.render, old)
 
 
-def has_custom_vt_control(scene: bpy.types.Scene | None = None) -> bool:
-    scene = scene or bpy.context.scene
+# Encodes the scene view transform for the asset's color-space switch node.
+_VIEW_TRANSFORM_VALUES = {
+    "AgX": 0.0,
+    "Standard": 0.1,
+    "Filmic": 0.2,
+    "Khronos PBR Neutral": 0.3,
+}
+
+
+def _custom_vt_socket(scene: bpy.types.Scene) -> bpy.types.NodeSocket | None:
     tree = get_comp_node_tree(scene)
     if not tree:
-        return False
-    color_space_control = tree.nodes.get(VTC_NAME)
-    if not color_space_control or not color_space_control.inputs:
-        return False
-    space = color_space_control.inputs.get("Space")
-    if not space:
-        space = color_space_control.inputs[0]
-    return space is not None
+        return None
+    node = tree.nodes.get(VTC_NAME)
+    if not node or not node.inputs:
+        return None
+    return node.inputs.get("Space") or node.inputs[0]
 
 
 def update_custom_vt(scene: bpy.types.Scene | None = None) -> None:
+    """Mirror the scene view transform into the asset's color-space socket."""
     scene = scene or bpy.context.scene
-    if not has_custom_vt_control(scene):
+    space = _custom_vt_socket(scene)
+    if space is None:
         return
-    tree = get_comp_node_tree(scene)
-    color_space_control = tree.nodes.get(VTC_NAME)
-    space = color_space_control.inputs.get("Space")
-    if not space:
-        space = color_space_control.inputs[0]
     try:
-        color_space = float(space.default_value)
-        ori_vt = scene.view_settings.view_transform
-        space_value_map = {
-            "AgX": 0,
-            "Standard": 0.1,
-            "Filmic": 0.2,
-            "Khronos PBR Neutral": 0.3,
-        }
-        space_value = space_value_map.get(ori_vt, 0)
-        if abs(space_value - color_space) < 0.00001:
+        current = float(space.default_value)
+        target = _VIEW_TRANSFORM_VALUES.get(scene.view_settings.view_transform, 0.0)
+        if abs(target - current) < 0.00001:
             return
-        space.default_value = space_value
-    except Exception:
+        space.default_value = target
+    except (AttributeError, TypeError, ValueError):
         pass

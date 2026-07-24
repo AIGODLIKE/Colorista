@@ -90,19 +90,11 @@ _locale_resource_dir: tuple[str, Path] | None = None
 
 
 def get_extension_user_folder() -> Path:
-    """Persistent user data root (never the extension install tree).
-
-    Prefers ``extension_path_user``. Falls back to ``user_resource`` only for
-    legacy (non-extension) installs where ``extension_path_user`` raises.
-    """
+    """Persistent user data root (never the extension install tree)."""
     global _extension_user_folder
     if _extension_user_folder is not None:
         return _extension_user_folder
-    try:
-        path = Path(bpy.utils.extension_path_user(get_package_root()))
-    except ValueError:
-        # Legacy add-on install: extension_path_user is unavailable.
-        path = Path(bpy.utils.user_resource("DATAFILES", path="Colorista", create=True))
+    path = Path(bpy.utils.extension_path_user(get_package_root()))
     path.mkdir(parents=True, exist_ok=True)
     _extension_user_folder = path
     return path

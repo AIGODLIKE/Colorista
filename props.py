@@ -14,8 +14,6 @@ class ColoristaHistoryItem(bpy.types.PropertyGroup):
 
 
 class Props(bpy.types.PropertyGroup):
-    PRESET_NONE_ID = PRESET_NONE_ID
-
     def update_enable_coloring(self, context: bpy.types.Context):
         global _enable_update_guard
         if _enable_update_guard:
@@ -24,7 +22,17 @@ class Props(bpy.types.PropertyGroup):
 
         if self.enable_coloring:
             logger.info("Coloring enabled")
-            if not coloring.enable(context):
+            try:
+                ok = coloring.enable(context)
+            except Exception:
+                logger.exception("Failed to enable coloring")
+                ok = False
+            if not ok:
+                # Roll back partial state so UI and handlers stay consistent.
+                try:
+                    coloring.disable(context)
+                except Exception:
+                    logger.exception("Failed to roll back coloring state")
                 _enable_update_guard = True
                 try:
                     self.enable_coloring = False
@@ -32,7 +40,10 @@ class Props(bpy.types.PropertyGroup):
                     _enable_update_guard = False
         else:
             logger.info("Coloring disabled")
-            coloring.disable(context)
+            try:
+                coloring.disable(context)
+            except Exception:
+                logger.exception("Failed to disable coloring")
 
     enable_coloring: bpy.props.BoolProperty(
         default=False,
