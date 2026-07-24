@@ -9,6 +9,7 @@ import bpy
 
 from ...utils.logger import logger
 from ...utils.node import get_comp_node_tree
+from .device import set_compositor_device
 
 VTC_NAME = "colorista-Color Space"
 
@@ -251,13 +252,13 @@ def switch_to_cpu_device(handler_cls: type[RenderHandler], scene: bpy.types.Scen
         return
     if "old_compositor_device" not in handler_cls.ctx:
         handler_cls.ctx["old_compositor_device"] = scene.render.compositor_device
-    scene.render.compositor_device = "CPU"
+    set_compositor_device(scene.render, "CPU")
 
 
 def restore_render_device(handler_cls: type[RenderHandler], scene: bpy.types.Scene):
     old = handler_cls.ctx.pop("old_compositor_device", None)
     if old is not None:
-        scene.render.compositor_device = old
+        set_compositor_device(scene.render, old)
 
 
 # Encodes the scene view transform for the asset's color-space switch node.

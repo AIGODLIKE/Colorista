@@ -4,6 +4,7 @@ from pathlib import Path
 
 import bpy
 
+from ..coloring.compositor.device import set_compositor_device
 from ..coloring.constants import OPS_TCTX, PRESET_NONE_ID
 from ..coloring.preset.io import save_compositor_values_json
 from ..src.translate import _T
@@ -165,10 +166,8 @@ class ColoristaSwitchDevice(bpy.types.Operator):
 
     def execute(self, context):
         render = context.scene.render
-        if render.compositor_device == "GPU":
-            render.compositor_device = "CPU"
-        else:
-            render.compositor_device = "GPU"
+        device = "CPU" if render.compositor_device == "GPU" else "GPU"
+        set_compositor_device(render, device)
         return {"FINISHED"}
 
 

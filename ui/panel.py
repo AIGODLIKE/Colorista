@@ -68,7 +68,6 @@ class ColoringPanel(bpy.types.Panel):
                 first_panel = False
             if not body:
                 continue
-            body.separator(type="LINE")
             node.draw_buttons(context, body)
             sections = list(iter_ui_node_input_sections(node, sockets))
             grouped = len(sections) > 1 or (

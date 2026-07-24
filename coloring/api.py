@@ -7,6 +7,7 @@ from pathlib import Path
 import bpy
 
 from .compositor import load as load_mod
+from .compositor.device import set_compositor_device
 from .constants import PRESET_NONE_ID
 from .session import preset_key, session
 from ..src.translate import _T
@@ -85,6 +86,7 @@ def enable(context: bpy.types.Context) -> bool:
     """Enable coloring: load default preset and activate handlers."""
     if not load(context, use_default=True, cache=False):
         return False
+    set_compositor_device(context.scene.render, "GPU")
     runtime.activate()
     return True
 

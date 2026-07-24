@@ -66,9 +66,9 @@ class Preferences(bpy.types.AddonPreferences):
     )
 
     cache_history_merge_seconds: bpy.props.IntProperty(
-        name="History Merge Window",
-        description="Within this many seconds, a new snapshot for the same asset replaces the latest one instead of adding another",
-        default=30,
+        name="History Merge Interval",
+        description="Changes to the same asset made less than this many seconds apart are combined into one history entry; set to 0 to keep each change as a separate entry",
+        default=5,
         min=0,
         max=600,
         translation_context=PROP_TCTX,
@@ -123,38 +123,55 @@ class Preferences(bpy.types.AddonPreferences):
     def draw(self, context):
         from ..utils.paths import get_default_user_presets_folder, resolve_user_presets_root
         from ..coloring.config import get_config
-
-        layout = self.layout
-        layout.prop(self, "use_asset_color_space_pref")
-        layout.prop(self, "gizmo_offset")
-        layout.prop(self, "main_node_group_name")
-        layout.prop(self, "ui_icon_scale")
-        row = layout.row()
-        row.prop(self, "cache_current_compositor", toggle=True)
-        row.prop(self, "cache_current_cache_count")
-        layout.prop(self, "cache_history_merge_seconds")
-        layout.prop(self, "force_use_cpu_render_image")
-
-        layout.separator()
-
-        box = layout.box()
-        box.label(text="User presets")
-        default_folder = get_default_user_presets_folder().as_posix()
-        active_folder = resolve_user_presets_root(get_config().custom_presets_root).as_posix()
-        row = box.row(align=True)
-        row.label(text=default_folder, translate=False)
         from ..utils.icon import Icon
 
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        box = layout.box()
+        box.label(text="General", icon=Icon.ui("PREFERENCES"))
+        col = box.column(align=True)
+        col.prop(self, "use_asset_color_space_pref")
+        col.prop(self, "gizmo_offset")
+        col.prop(self, "ui_icon_scale")
+
+        box = layout.box()
+        box.label(text="Compositor", icon=Icon.ui("NODE_COMPOSITING"))
+        col = box.column(align=True)
+        col.prop(self, "force_use_cpu_render_image")
+
+        box = layout.box()
+        box.label(text="History", icon=Icon.ui("RECOVER_LAST"))
+        col = box.column(align=True)
+        col.prop(self, "cache_current_compositor")
+        history_col = col.column(align=True)
+        history_col.active = self.cache_current_compositor
+        history_col.prop(self, "cache_current_cache_count")
+        history_col.prop(self, "cache_history_merge_seconds")
+
+        box = layout.box()
+        box.label(text="User Presets", icon=Icon.ui("PRESET"))
+        col = box.column(align=True)
+        col.prop(self, "use_custom_presets_path")
+        custom_path_col = col.column(align=True)
+        custom_path_col.active = self.use_custom_presets_path
+        custom_path_col.prop(self, "presets_path")
+
+        default_folder = get_default_user_presets_folder().as_posix()
+        active_folder = resolve_user_presets_root(get_config().custom_presets_root).as_posix()
+        folder = active_folder if self.use_custom_presets_path else default_folder
+        row = col.row(align=True)
+        row.label(text=folder, translate=False)
         row.operator(
             "wm.path_open", text="", icon=Icon.ui("FILE_FOLDER")
         ).filepath = active_folder
-        box.prop(self, "use_custom_presets_path")
-        if self.use_custom_presets_path:
-            box.prop(self, "presets_path")
 
-        layout.separator()
-
-        layout.prop(self, "enable_logging")
+        box = layout.box()
+        box.label(text="Advanced", icon=Icon.ui("SETTINGS"))
+        col = box.column(align=True)
+        col.prop(self, "main_node_group_name")
+        col.prop(self, "enable_logging")
 
 
 def register():

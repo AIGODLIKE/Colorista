@@ -10,7 +10,7 @@ class ColoristaConfig:
     use_asset_color_space_pref: bool = False
     cache_current_compositor: bool = True
     cache_current_cache_count: int = 10
-    cache_history_merge_seconds: int = 30
+    cache_history_merge_seconds: int = 5
     force_use_cpu_render_image: bool = False
     main_node_group_name: str = "Basic adjustment nodes for colorists"
     use_custom_presets_path: bool = False
