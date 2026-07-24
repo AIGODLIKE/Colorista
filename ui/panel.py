@@ -2,6 +2,7 @@ import bpy
 
 from ..coloring.compositor.ui_nodes import (
     draw_layout_panel,
+    iter_ui_node_input_sections,
     iter_ui_coloring_nodes,
     node_panel_id,
 )
@@ -69,16 +70,41 @@ class ColoringPanel(bpy.types.Panel):
                 continue
             body.separator(type="LINE")
             node.draw_buttons(context, body)
-            bbox = body
-            for inp in sockets:
-                if inp.name.startswith("——"):
-                    bbox = body.box()
-                    row = bbox.row()
-                    row.alert = True
-                    row.alignment = "CENTER"
-                    row.label(text=inp.name)
-                    continue
-                bbox.template_node_view(comp_tree, node, inp)
+            sections = list(iter_ui_node_input_sections(node, sockets))
+            grouped = len(sections) > 1 or (
+                sections and sections[0][0] is not None
+            )
+            if grouped:
+                for section_id, section_label, section_sockets in sections:
+                    section_header, section_body = draw_layout_panel(
+                        body,
+                        f"{panel_id}_{section_id}",
+                        default_closed=False,
+                    )
+                    section_header.label(text=section_label)
+                    if not section_body:
+                        continue
+                    self._draw_node_inputs(
+                        section_body,
+                        comp_tree,
+                        node,
+                        section_sockets,
+                    )
+            elif sections:
+                self._draw_node_inputs(body, comp_tree, node, sections[0][2])
+
+    @staticmethod
+    def _draw_node_inputs(layout, tree, node, sockets):
+        bbox = layout
+        for inp in sockets:
+            if inp.name.startswith("——"):
+                bbox = layout.box()
+                row = bbox.row()
+                row.alert = True
+                row.alignment = "CENTER"
+                row.label(text=inp.name)
+                continue
+            bbox.template_node_view(tree, node, inp)
 
     def draw_header(self, context: bpy.types.Context):
         row = self.layout.row(align=True)

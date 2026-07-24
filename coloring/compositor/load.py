@@ -12,18 +12,19 @@ from ...utils.node import get_comp_node_tree, scene_uses_compositor
 from ...utils.paths import get_default_preset_path
 from ..session import preset_key, session
 from .handlers import (
-    ColoristaDepsgraphMonitor,
-    sync_nested_driver_values,
+    ColoristaMsgBusMonitor,
     update_custom_vt,
     update_node_group,
 )
 from .transfer import (
     extract_root_input_bindings,
+    materialize_root_input_bindings,
     reload_drivers,
     remove_invalid_drivers,
     reset_driver_with_scene_ref,
     store_driver_bindings,
     transfer_compositor,
+    upgrade_native_bindings,
 )
 from .viewport import set_viewport_shading
 
@@ -74,7 +75,7 @@ def _finish_load(sce: bpy.types.Scene, label: str) -> bool:
     logger.info(_T("Loaded compositor: {}").format(label))
     update_node_group(sce)
     update_custom_vt(sce)
-    ColoristaDepsgraphMonitor.refresh(sce)
+    ColoristaMsgBusMonitor.refresh(sce)
     return True
 
 
@@ -140,12 +141,12 @@ def load_asset(
         session.loaded_node_groups.clear()
         session.loaded_node_groups.update(previous_groups)
         return False
-    root_node_names = {node.name for node in current_tree.nodes}
-    bindings = extract_root_input_bindings(new_nts, root_node_names)
-    # Persist so save/reopen and undo can rebuild the runtime bindings; the
-    # monitor caches them from this property in refresh().
+    bindings = extract_root_input_bindings(new_nts, current_tree)
+    # Compile supported cross-tree formulas into native group links.
+    bindings = materialize_root_input_bindings(current_tree, bindings)
+    upgrade_native_bindings(current_tree)
+    # Preserve metadata only for targets a future migration may support.
     store_driver_bindings(current_tree, bindings)
-    sync_nested_driver_values(sce, bindings)
     for nt in new_nts:
         reset_driver_with_scene_ref(nt.animation_data, load_sce)
     _remove_loaded_scenes(load_sce)

@@ -1,4 +1,4 @@
-"""Activate/defer handlers until coloring is enabled."""
+"""Activate event-driven synchronization only while coloring is enabled."""
 
 import bpy
 
@@ -7,6 +7,9 @@ from .session import session
 _active = False
 _load_post_registered = False
 _bootstrap_timer_registered = False
+_scene_msgbus_owner = object()
+_scene_msgbus_registered = False
+_changing_scene = False
 
 
 def is_active() -> bool:
@@ -31,6 +34,7 @@ def ensure_coloring_content(context: bpy.types.Context | None = None) -> None:
     try:
         scene = context.scene
         if not scene.colorista_prop.enable_coloring:
+            _suspend_runtime()
             return
     except Exception:
         return
@@ -78,10 +82,9 @@ def _on_file_load(_scene):
 
     history.clear_baseline()
     try:
+        _suspend_runtime()
+        _register_scene_msgbus()
         ensure_coloring_content(bpy.context)
-        from .compositor.handlers import ColoristaDepsgraphMonitor
-
-        ColoristaDepsgraphMonitor.refresh(bpy.context.scene)
         _refresh_history_ui(bpy.context)
     except Exception:
         from ..utils.logger import logger
@@ -108,6 +111,46 @@ def _unregister_load_post():
     _load_post_registered = False
 
 
+def _on_active_scene_change() -> None:
+    """Activate or suspend runtime state when a window switches scenes."""
+    global _changing_scene
+    if _changing_scene:
+        return
+    _changing_scene = True
+    try:
+        scene = bpy.context.scene
+        props = getattr(scene, "colorista_prop", None)
+        _suspend_runtime()
+        if props is not None and props.enable_coloring:
+            activate()
+    except (AttributeError, ReferenceError):
+        _suspend_runtime()
+    finally:
+        _changing_scene = False
+
+
+def _register_scene_msgbus() -> None:
+    global _scene_msgbus_registered
+    bpy.msgbus.clear_by_owner(_scene_msgbus_owner)
+    try:
+        bpy.msgbus.subscribe_rna(
+            key=(bpy.types.Window, "scene"),
+            owner=_scene_msgbus_owner,
+            args=(),
+            notify=_on_active_scene_change,
+        )
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        _scene_msgbus_registered = False
+        return
+    _scene_msgbus_registered = True
+
+
+def _unregister_scene_msgbus() -> None:
+    global _scene_msgbus_registered
+    bpy.msgbus.clear_by_owner(_scene_msgbus_owner)
+    _scene_msgbus_registered = False
+
+
 def bootstrap_coloring_state():
     try:
         # Preference values are only reliable after registration completes;
@@ -131,18 +174,19 @@ def _deferred_bootstrap():
 
 def activate() -> None:
     global _active
-    if _active:
-        return
-    _active = True
 
     from .compositor.handlers import (
-        ColoristaDepsgraphMonitor,
+        ColoristaMsgBusMonitor,
         RenderHandler,
         configure_handlers,
         restore_render_device,
         switch_to_cpu_device,
+        update_custom_vt,
+        update_node_group,
     )
     from .config import get_config
+    from .compositor.transfer import materialize_stored_bindings
+    from ..utils.node import get_comp_node_tree
 
     configure_handlers(
         main_node_group_name=lambda: get_config().main_node_group_name,
@@ -150,13 +194,26 @@ def activate() -> None:
         force_use_cpu=lambda: get_config().force_use_cpu_render_image,
     )
 
-    ColoristaDepsgraphMonitor.refresh(bpy.context.scene)
-    ColoristaDepsgraphMonitor.register()
+    materialize_stored_bindings(get_comp_node_tree(bpy.context.scene))
+    update_node_group(bpy.context.scene)
+    update_custom_vt(bpy.context.scene)
+    ColoristaMsgBusMonitor.register(bpy.context.scene)
     # Stash/force on render_init (once per job); restore on either outcome.
     RenderHandler.add(switch_to_cpu_device, "init")
     RenderHandler.add(restore_render_device, "complete")
     RenderHandler.add(restore_render_device, "cancel")
     RenderHandler.register()
+    _active = True
+
+
+def _suspend_runtime() -> None:
+    """Remove runtime callbacks without clearing scene data or session state."""
+    global _active
+    from .compositor.handlers import ColoristaMsgBusMonitor, RenderHandler
+
+    ColoristaMsgBusMonitor.unregister()
+    RenderHandler.unregister()
+    _active = False
 
 
 def deactivate(context: bpy.types.Context | None = None, *, clear_tree: bool = False) -> None:
@@ -164,12 +221,7 @@ def deactivate(context: bpy.types.Context | None = None, *, clear_tree: bool = F
     global _active
     from .compositor.viewport import clear_compositor, set_viewport_shading
 
-    if _active:
-        from .compositor.handlers import ColoristaDepsgraphMonitor, RenderHandler
-
-        ColoristaDepsgraphMonitor.unregister()
-        RenderHandler.unregister()
-        _active = False
+    _suspend_runtime()
 
     if clear_tree:
         from .compositor.load import remove_orphan_node_groups
@@ -201,8 +253,9 @@ def register():
     global _bootstrap_timer_registered
     # load_post must stay registered while the extension is enabled: coloring
     # state is stored per scene, so opening a file with coloring on has to
-    # reactivate the (otherwise deferred) depsgraph/render handlers.
+    # rebuild the RNA subscriptions and render callbacks.
     _register_load_post()
+    _register_scene_msgbus()
     if not _bootstrap_timer_registered:
         bpy.app.timers.register(_deferred_bootstrap, first_interval=0)
         _bootstrap_timer_registered = True
@@ -210,6 +263,7 @@ def register():
 
 def unregister():
     global _bootstrap_timer_registered
+    _unregister_scene_msgbus()
     try:
         deactivate(bpy.context, clear_tree=False)
     except Exception:

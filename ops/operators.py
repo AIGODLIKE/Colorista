@@ -52,10 +52,8 @@ class ColoristaSavePreset(bpy.types.Operator):
         layout = self.layout
         path = self.get_preset_path(context)
         layout.alert = True
-        layout.label(
-            text=_T("Overwrite preset: {}?").format(path.stem),
-            icon=Icon.ui("QUESTION"),
-        )
+        layout.label(text=_T("Overwrite this preset?"), icon=Icon.ui("QUESTION"))
+        layout.label(text=path.stem, translate=False)
 
     def get_preset_path(self, context: bpy.types.Context | None = None):
         context = context or bpy.context
@@ -81,7 +79,7 @@ class ColoristaSavePreset(bpy.types.Operator):
             self.report({"ERROR"}, _T("Preset path is outside the user presets folder"))
             return {"CANCELLED"}
         if path and path.exists() and self.popup:
-            return wm.invoke_props_dialog(self, width=200)
+            return wm.invoke_props_dialog(self, width=320)
         return self.execute(context)
 
     def execute(self, context: bpy.types.Context):
@@ -131,13 +129,13 @@ class ColoristaDeletePreset(bpy.types.Operator):
         asset = Path(context.scene.colorista_prop.get_asset_path(context)).stem
         preset = Path(context.scene.colorista_prop.get_preset_path(context)).stem
         layout.alert = True
-        layout.label(
-            text=_T('Delete preset "{}" for asset "{}"?').format(preset, asset),
-            icon=Icon.ui("TRASH"),
-        )
+        layout.label(text=_T("Delete this preset?"), icon=Icon.ui("TRASH"))
+        col = layout.column(align=True)
+        col.label(text=_T("Preset: {}").format(preset), translate=False)
+        col.label(text=_T("Asset: {}").format(asset), translate=False)
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
-        return context.window_manager.invoke_props_dialog(self, width=200)
+        return context.window_manager.invoke_props_dialog(self, width=320)
 
     def execute(self, context: bpy.types.Context):
         path = Path(context.scene.colorista_prop.get_preset_path(context))

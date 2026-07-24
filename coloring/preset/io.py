@@ -181,7 +181,9 @@ def apply_color_ramp(ramp: bpy.types.ColorRamp, data: dict) -> None:
 
 def _dump_ui_socket_inputs(node: bpy.types.Node) -> dict:
     inputs: dict[str, Any] = {}
-    for inp in find_ui_node_inputs(node):
+    # Presets retain every editable mode-specific socket so switching a
+    # Color Balance type does not discard values from the other modes.
+    for inp in find_ui_node_inputs(node, visible_only=False):
         if inp.name.startswith("——"):
             continue
         if not hasattr(inp, "default_value"):

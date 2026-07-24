@@ -75,8 +75,10 @@ translations = (
     ("Toggle viewport compositor for this window", "切换当前窗口的视口合成", None),
     # Messages
     ("Loaded compositor: {}", "已加载合成器: {}"),
-    ("Overwrite preset: {}?", "是否覆盖预设 {}？"),
-    ('Delete preset "{}" for asset "{}"?', '是否删除预设 "{}"（资产 "{}"）？'),
+    ("Overwrite this preset?", "是否覆盖此预设？"),
+    ("Delete this preset?", "是否删除此预设？"),
+    ("Preset: {}", "预设: {}"),
+    ("Asset: {}", "资产: {}"),
     ("History file not found", "未找到历史文件"),
     ("Enable Coloring first", "请先开启调色"),
     ("Compositor nodes are not enabled for this scene", "当前场景未启用合成节点"),
